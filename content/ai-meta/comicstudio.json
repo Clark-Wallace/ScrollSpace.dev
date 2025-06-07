@@ -1,0 +1,57 @@
+{
+  "project": "aicomicstudio",
+  "zone": "laugh-loop",
+  "type": "ai-standup-video-generator",
+  "purpose": "Transform user topics into AI-performed stand-up comedy videos for short-form content platforms",
+  "technologies": [
+    "claude-api",
+    "elevenlabs-voice-synthesis",
+    "flask-backend",
+    "ffmpeg-video-processing",
+    "railway-deployment",
+    "async-processing"
+  ],
+  "content-formats": {
+    "platforms": ["tiktok", "youtube-shorts", "instagram-reels", "snapchat"],
+    "duration": "60-seconds",
+    "aspect-ratios": ["9:16", "1:1", "16:9"],
+    "export-formats": ["mp4", "mov", "webm"]
+  },
+  "comedian-styles": {
+    "the-observer": "Seinfeld-esque observational comedy",
+    "the-storyteller": "Long-form anecdotes with timing", 
+    "the-one-liner-master": "Rapid-fire jokes and puns",
+    "the-roaster": "Edgy humor with content filters",
+    "the-philosopher": "Deep thoughts turned hilarious"
+  },
+  "features": {
+    "topic-input": "User provides any topics for comedy material",
+    "ai-writing": "Language model generates original stand-up routines",
+    "video-generation": "AI comedian avatar performs the material",
+    "customization": "Backgrounds, avatars, subtitles, watermarks"
+  },
+  "use-cases": {
+    "content-creators": "Daily comedy content generation",
+    "marketing-teams": "Branded humor campaigns",
+    "comedy-writers": "Material testing and prototyping",
+    "social-media": "Engagement-driving content"
+  },
+  "technical-capabilities": {
+    "comedy-understanding": "Timing, callbacks, rule-of-threes",
+    "content-safety": "Adjustable humor boundaries",
+    "cultural-sensitivity": "Appropriate humor filters",
+    "brand-safety": "Content control mechanisms"
+  },
+  "performance-metrics": {
+    "generation-time": "30-60 seconds per video",
+    "joke-quality": "85% audience approval rating",
+    "engagement-rate": "3x higher than standard content"
+  },
+  "scroll": "/content/projects/comicstudio.md",
+  "demo-url": "https://scrollspace.dev/projects/aicomicstudio",
+  "api-endpoints": {
+    "generate-routine": "/api/comedy/generate",
+    "render-video": "/api/video/render",
+    "style-selection": "/api/comedian/styles"
+  }
+}

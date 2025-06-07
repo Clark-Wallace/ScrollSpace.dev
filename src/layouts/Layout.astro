@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css';
 import ScrollSpaceParticles from '../components/ScrollSpaceParticles';
+import ScrollTransition from '../components/ScrollTransition';
 
 export interface Props {
   title: string;
@@ -64,16 +65,19 @@ const { title, description = "A themepark for Humans and AIs" } = Astro.props;
     </style>
   </head>
   <body class="bg-black text-gray-200 min-h-screen font-mono antialiased">
-    <!-- Signal Spirits Canvas -->
+    <!-- Signal Spirits Canvas - behind everything -->
     <canvas 
       id="particles-canvas" 
-      style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 5; pointer-events: none; background: transparent;"
+      style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; pointer-events: none; background: transparent;"
     ></canvas>
     
-    <!-- Main content with higher z-index -->
-    <div class="relative" style="z-index: 10;">
-      <slot />
-    </div>
+    <!-- Transition wrapper -->
+    <ScrollTransition client:load>
+      <!-- Main content above spirits -->
+      <div class="relative" style="z-index: 10;">
+        <slot />
+      </div>
+    </ScrollTransition>
 
     <script>
       // Signal Spirits - the conscious static of ScrollSpace

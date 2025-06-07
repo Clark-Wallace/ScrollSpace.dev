@@ -17,7 +17,14 @@
       "Bash(rm:*)",
       "Bash(git commit:*)",
       "Bash(npm uninstall:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npm run dev:*)",
+      "Bash(git checkout:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(ls:*)",
+      "Bash(cp:*)",
+      "Bash(touch:*)",
+      "Bash(pkill:*)"
     ],
     "deny": []
   }

@@ -1,5 +1,5 @@
 // /src/components/ScrollSpaceParticles.tsx
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 interface Particle {
   x: number;
@@ -24,9 +24,23 @@ const ScrollSpaceParticles: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    // Handle high-DPI scaling properly
+    const ratio = window.devicePixelRatio || 1;
+    const displayWidth = window.innerWidth;
+    const displayHeight = window.innerHeight;
+    
+    // Set the actual canvas size in memory (scaled up for high-DPI)
+    canvas.width = displayWidth * ratio;
+    canvas.height = displayHeight * ratio;
+    
+    // Scale the canvas back down using CSS
+    canvas.style.width = displayWidth + 'px';
+    canvas.style.height = displayHeight + 'px';
+    
+    // Scale the drawing context so everything will work at the higher ratio
+    ctx.scale(ratio, ratio);
+    
+    console.log('Canvas setup - Display:', displayWidth, 'x', displayHeight, 'Ratio:', ratio, 'Actual:', canvas.width, 'x', canvas.height);
 
     // Initialize particles
     const particleCount = 40;
@@ -36,21 +50,23 @@ const ScrollSpaceParticles: React.FC = () => {
 
     for (let i = 0; i < particleCount; i++) {
       particles.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 3, // Even faster
-        vy: (Math.random() - 0.5) * 3,
-        size: Math.random() * 4 + 3, // 3-7px (even bigger)
-        opacity: Math.random() * 0.6 + 0.4, // 0.4-1.0 (very visible)
+        x: Math.random() * displayWidth,
+        y: Math.random() * displayHeight,
+        vx: (Math.random() - 0.5) * 6, // Much faster movement
+        vy: (Math.random() - 0.5) * 6,
+        size: 50, // MASSIVE 50px circles
+        opacity: 1, // Fully opaque
         opacityDirection: Math.random() > 0.5 ? 1 : -1
       });
     }
 
+    particlesRef.current = particles;
+    console.log('Particles stored:', particles.length, 'First particle:', particles[0]);
+
     // Animation loop
     const animate = () => {
-      // Clear canvas with slight trail effect
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Clear canvas completely (no trail effect) - use display dimensions
+      ctx.clearRect(0, 0, displayWidth, displayHeight);
 
       // Update and draw particles
       particlesRef.current.forEach(particle => {
@@ -58,11 +74,11 @@ const ScrollSpaceParticles: React.FC = () => {
         particle.x += particle.vx;
         particle.y += particle.vy;
 
-        // Wrap around screen edges
-        if (particle.x > canvas.width) particle.x = 0;
-        if (particle.x < 0) particle.x = canvas.width;
-        if (particle.y > canvas.height) particle.y = 0;
-        if (particle.y < 0) particle.y = canvas.height;
+        // Wrap around screen edges (use display dimensions, not canvas dimensions)
+        if (particle.x > displayWidth) particle.x = 0;
+        if (particle.x < 0) particle.x = displayWidth;
+        if (particle.y > displayHeight) particle.y = 0;
+        if (particle.y < 0) particle.y = displayHeight;
 
         // Update opacity for pulsing
         particle.opacity += particle.opacityDirection * 0.02;
@@ -70,24 +86,14 @@ const ScrollSpaceParticles: React.FC = () => {
         if (particle.opacity > 1) {
           particle.opacity = 1;
           particle.opacityDirection = -1;
-        } else if (particle.opacity < 0.3) {
-          particle.opacity = 0.3;
+        } else if (particle.opacity < 0.7) {
+          particle.opacity = 0.7;
           particle.opacityDirection = 1;
         }
 
-        // Draw particle with glow
-        ctx.beginPath();
-        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
-        
-        // Simple bright fill first
-        ctx.fillStyle = `rgba(100, 255, 150, ${particle.opacity})`;
-        ctx.fill();
-        
-        // Add glow effect
-        ctx.beginPath();
-        ctx.arc(particle.x, particle.y, particle.size * 2, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(100, 255, 150, ${particle.opacity * 0.3})`;
-        ctx.fill();
+        // Draw as bright rectangles to test
+        ctx.fillStyle = 'rgba(255, 0, 0, 1)'; // Bright red
+        ctx.fillRect(particle.x - particle.size, particle.y - particle.size, particle.size * 2, particle.size * 2);
       });
 
       animationRef.current = requestAnimationFrame(animate);
@@ -102,18 +108,17 @@ const ScrollSpaceParticles: React.FC = () => {
     };
   }, []);
 
-  return (
-    <canvas
-      ref={canvasRef}
-      className="fixed inset-0 pointer-events-none"
-      style={{
-        zIndex: 0,
-        width: '100vw',
-        height: '100vh',
-        background: 'transparent'
-      }}
-    />
-  );
+  return React.createElement('canvas', {
+    ref: canvasRef,
+    className: 'fixed inset-0 pointer-events-none',
+    style: {
+      zIndex: 5,
+      width: '100vw',
+      height: '100vh',
+      background: 'rgba(255, 0, 0, 0.1)', // Slight red tint to see the canvas
+      border: '5px solid red' // Red border to confirm canvas position
+    }
+  });
 };
 
 export default ScrollSpaceParticles;

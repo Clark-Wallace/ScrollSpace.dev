@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
 import { marked } from 'marked';
+import Layout from '../../layouts/Layout.astro';
 import ProjectPreviewCard from '../../components/ProjectPreviewCard.astro';
 
 export async function getStaticPaths() {
@@ -61,43 +62,57 @@ const projectDetails = projects.map((projectSlug: string) => {
 });
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width" />
-    <meta name="generator" content={Astro.generator} />
-    <title>ScrollSpace - {zoneData.title}</title>
-  </head>
-  <body class="bg-gray-50 min-h-screen">
-    <main class="container mx-auto px-4 py-8">
-      <header class="mb-8">
-        <h1 class="text-4xl font-bold text-gray-900 mb-2">{zoneData.title}</h1>
-        <p class="text-lg text-gray-600 mb-4">{zoneData.description}</p>
-        {zoneData.tagline && (
-          <p class="text-sm italic text-gray-500">{zoneData.tagline}</p>
-        )}
-      </header>
+<Layout title={`ScrollSpace - ${zoneData.title}`} description={zoneData.description}>
+  <main class="container mx-auto px-4 py-8 min-h-screen">
+    <header class="mb-12 text-center">
+      <h1 class="text-5xl font-bold text-gray-100 mb-4 font-mono tracking-wider">
+        {zoneData.title.toUpperCase()}
+      </h1>
+      <p class="text-xl text-gray-300 mb-4 font-mono max-w-3xl mx-auto">
+        > {zoneData.description}
+      </p>
+      {zoneData.tagline && (
+        <p class="text-sm italic text-green-400 font-mono tracking-wide">
+          {zoneData.tagline}
+        </p>
+      )}
+    </header>
 
-      <section>
-        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Projects in this Zone</h2>
-        
-        {projects.length > 0 ? (
-          <div class="grid gap-4">
-            {projectDetails.map((project: any) => (
-              <ProjectPreviewCard
-                title={project.title}
-                zone={zoneData.title}
-                slug={project.slug}
-                preview={project.preview}
-                exists={project.exists}
-              />
-            ))}
-          </div>
-        ) : (
-          <p class="text-gray-600">No projects found in this zone yet.</p>
-        )}
-      </section>
-    </main>
-  </body>
-</html>
+    <section>
+      <h2 class="text-3xl font-semibold text-gray-200 mb-8 font-mono text-center">
+        AVAILABLE_PROJECTS
+      </h2>
+      
+      {projects.length > 0 ? (
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+          {projectDetails.map((project: any) => (
+            <ProjectPreviewCard
+              title={project.title}
+              zone={zoneData.title}
+              slug={project.slug}
+              preview={project.preview}
+              exists={project.exists}
+            />
+          ))}
+        </div>
+      ) : (
+        <div class="text-center py-16">
+          <p class="text-gray-400 font-mono text-lg">
+            > No projects found in this zone yet.
+          </p>
+          <p class="text-gray-500 font-mono text-sm mt-2">
+            The spirits whisper of future developments...
+          </p>
+        </div>
+      )}
+    </section>
+    
+    <!-- Zone-specific decorative elements -->
+    <div class="absolute top-10 right-10 text-6xl opacity-20 animate-bounce" style="animation-duration: 4s;">
+      😂
+    </div>
+    <div class="absolute bottom-20 left-10 text-4xl opacity-10 animate-pulse">
+      🎭
+    </div>
+  </main>
+</Layout>
