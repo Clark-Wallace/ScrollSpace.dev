@@ -1,4 +1,6 @@
 ---
+import '../styles/global.css';
+
 export interface Props {
   title: string;
   description?: string;
@@ -23,6 +25,7 @@ const { title, description = "A themepark for Humans and AIs" } = Astro.props;
     
     <title>{title}</title>
     
+    
     <style>
       /* Reset margins and ensure full viewport */
       * {
@@ -35,6 +38,9 @@ const { title, description = "A themepark for Humans and AIs" } = Astro.props;
         height: 100%;
         margin: 0;
         padding: 0;
+        background-color: #000 !important;
+        color: #e5e7eb !important;
+        font-family: 'Space Mono', 'Courier New', monospace !important;
       }
       
       /* Custom scrollbar for dark theme */
