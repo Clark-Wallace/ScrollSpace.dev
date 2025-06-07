@@ -19,18 +19,20 @@ const ScrollSpaceParticles: React.FC = () => {
 
   // Initialize particles
   useEffect(() => {
-    const particleCount = Math.floor(Math.random() * 21) + 30; // 30-50 particles
+    const particleCount = 40; // Fixed count for consistency
     const initialParticles: Particle[] = [];
+    
+    console.log('Initializing particles:', particleCount); // Debug log
 
     for (let i = 0; i < particleCount; i++) {
       initialParticles.push({
         id: i,
-        x: Math.random() * window.innerWidth,
-        y: Math.random() * window.innerHeight,
-        vx: (Math.random() - 0.5) * 0.5, // Slow movement
-        vy: (Math.random() - 0.5) * 0.5,
-        size: Math.random() * 2 + 1, // 1-3px
-        opacity: Math.random() * 0.3 + 0.1, // 0.1-0.4
+        x: Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 1920),
+        y: Math.random() * (typeof window !== 'undefined' ? window.innerHeight : 1080),
+        vx: (Math.random() - 0.5) * 2, // Much faster movement
+        vy: (Math.random() - 0.5) * 2,
+        size: Math.random() * 3 + 2, // 2-5px (bigger)
+        opacity: Math.random() * 0.6 + 0.2, // 0.2-0.8 (much more visible)
         opacityDirection: Math.random() > 0.5 ? 1 : -1
       });
     }
@@ -63,15 +65,15 @@ const ScrollSpaceParticles: React.FC = () => {
           if (newY > canvas.height) newY = 0;
           if (newY < 0) newY = canvas.height;
 
-          // Update opacity for subtle pulsing
-          let newOpacity = particle.opacity + particle.opacityDirection * 0.002;
+          // Update opacity for more noticeable pulsing
+          let newOpacity = particle.opacity + particle.opacityDirection * 0.01;
           let newOpacityDirection = particle.opacityDirection;
           
-          if (newOpacity > 0.4) {
-            newOpacity = 0.4;
+          if (newOpacity > 0.8) {
+            newOpacity = 0.8;
             newOpacityDirection = -1;
-          } else if (newOpacity < 0.05) {
-            newOpacity = 0.05;
+          } else if (newOpacity < 0.2) {
+            newOpacity = 0.2;
             newOpacityDirection = 1;
           }
 
@@ -79,14 +81,15 @@ const ScrollSpaceParticles: React.FC = () => {
           ctx.beginPath();
           ctx.arc(newX, newY, particle.size, 0, Math.PI * 2);
           
-          // Gradient for glow effect
+          // Enhanced gradient for stronger glow effect
           const gradient = ctx.createRadialGradient(
             newX, newY, 0,
-            newX, newY, particle.size * 2
+            newX, newY, particle.size * 4
           );
-          gradient.addColorStop(0, `rgba(173, 216, 230, ${newOpacity})`); // Light blue center
-          gradient.addColorStop(0.5, `rgba(255, 255, 255, ${newOpacity * 0.6})`); // White middle
-          gradient.addColorStop(1, `rgba(173, 216, 230, 0)`); // Transparent edge
+          gradient.addColorStop(0, `rgba(100, 255, 150, ${newOpacity})`); // Bright green center
+          gradient.addColorStop(0.3, `rgba(150, 255, 200, ${newOpacity * 0.8})`); // Light green
+          gradient.addColorStop(0.6, `rgba(200, 255, 255, ${newOpacity * 0.4})`); // Cyan
+          gradient.addColorStop(1, `rgba(100, 255, 150, 0)`); // Transparent edge
           
           ctx.fillStyle = gradient;
           ctx.fill();
