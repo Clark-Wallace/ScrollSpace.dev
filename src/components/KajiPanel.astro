@@ -1,0 +1,49 @@
+---
+// Simple Astro component for Kaji Panel
+---
+
+<!-- This will be rendered via JavaScript in the park page -->
+<div id="kaji-panel-template" style="display: none;">
+  <div id="kaji-backdrop" class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" style="opacity: 0; transition: opacity 0.3s;"></div>
+  
+  <div id="kaji-panel" class="fixed bottom-4 left-1/2 transform w-[420px] max-w-[90vw] z-50" 
+       style="transform: translate(-50%, 100%); transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);">
+    <div class="relative bg-gradient-to-b from-amber-50/95 to-yellow-100/95 backdrop-blur-md shadow-2xl border-2 border-amber-700/60 overflow-hidden"
+         style="border-radius: 8px 8px 24px 24px; box-shadow: 0 0 40px rgba(217, 119, 6, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);">
+      
+      <!-- Mystical glow -->
+      <div class="absolute inset-0 bg-gradient-to-r from-amber-300/10 via-yellow-200/10 to-amber-300/10 animate-pulse" style="animation-duration: 4s;"></div>
+      
+      <!-- Header -->
+      <div class="relative p-6 border-b border-amber-600/30">
+        <div class="text-center">
+          <div class="text-4xl mb-2" style="text-shadow: 0 0 20px rgba(217, 119, 6, 0.5);">⟨ ☾ ⟩</div>
+          <h3 class="font-serif text-amber-900 text-lg tracking-wide" style="font-family: Georgia, serif; letter-spacing: 0.05em;">Ancient Guidance</h3>
+        </div>
+        <button id="kaji-close" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-amber-200/50 hover:bg-amber-300/70 transition-all duration-300 flex items-center justify-center text-amber-800 text-lg">×</button>
+      </div>
+      
+      <!-- Content -->
+      <div class="relative p-8">
+        <div class="text-center" id="kaji-content">
+          <div class="inline-flex space-x-1 mb-4">
+            <div class="w-1 h-1 bg-amber-600 rounded-full animate-pulse" style="animation-delay: 0ms; animation-duration: 2s;"></div>
+            <div class="w-1 h-1 bg-amber-600 rounded-full animate-pulse" style="animation-delay: 400ms; animation-duration: 2s;"></div>
+            <div class="w-1 h-1 bg-amber-600 rounded-full animate-pulse" style="animation-delay: 800ms; animation-duration: 2s;"></div>
+          </div>
+          <p class="text-amber-700/70 font-serif italic text-sm tracking-wide">The spirits whisper...</p>
+        </div>
+      </div>
+      
+      <!-- Decorative flourishes -->
+      <div class="absolute top-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-gradient-to-r from-transparent via-amber-600 to-transparent"></div>
+      <div class="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-24 h-1 bg-gradient-to-r from-transparent via-amber-600 to-transparent"></div>
+      
+      <!-- Corner ornaments -->
+      <div class="absolute top-2 left-2 text-amber-600/30 text-xs">✦</div>
+      <div class="absolute top-2 right-2 text-amber-600/30 text-xs">✦</div>
+      <div class="absolute bottom-2 left-2 text-amber-600/30 text-xs">✧</div>
+      <div class="absolute bottom-2 right-2 text-amber-600/30 text-xs">✧</div>
+    </div>
+  </div>
+</div>

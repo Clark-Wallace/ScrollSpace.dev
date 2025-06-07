@@ -1,4 +1,4 @@
-// /components/KajiPanel.tsx
+// /src/components/KajiPanel.tsx
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -26,7 +26,7 @@ const KajiPanel: React.FC<KajiPanelProps> = ({ isOpen, onClose, zone, project, q
       const data = await response.json();
       setMessage(data.message);
     } catch (error) {
-      setMessage('Connection to guide lost. Try again.');
+      setMessage('The ancient spirits are silent. Try again later.');
     } finally {
       setLoading(false);
     }
@@ -59,28 +59,17 @@ const KajiPanel: React.FC<KajiPanelProps> = ({ isOpen, onClose, zone, project, q
             transition={{ type: 'spring', damping: 30, stiffness: 150 }}
             className="fixed bottom-4 left-1/2 transform w-[420px] max-w-[90vw] z-50"
           >
-            <div className="relative bg-gradient-to-b from-amber-50/95 to-yellow-100/95 backdrop-blur-md rounded-none shadow-2xl border-2 border-amber-700/60 overflow-hidden"
+            <div className="relative bg-gradient-to-b from-amber-50/95 to-yellow-100/95 backdrop-blur-md shadow-2xl border-2 border-amber-700/60 overflow-hidden"
                  style={{
                    borderRadius: '8px 8px 24px 24px',
                    boxShadow: '0 0 40px rgba(217, 119, 6, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
                  }}>
               
-              {/* Ancient parchment texture */}
-              <div className="absolute inset-0 opacity-20">
-                <div 
-                  className="w-full h-full" 
-                  style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23D97706' fill-opacity='0.15'%3E%3Cpath d='M30 30c0-5.523-4.477-10-10-10s-10 4.477-10 10 4.477 10 10 10 10-4.477 10-10zm20 0c0-5.523-4.477-10-10-10s-10 4.477-10 10 4.477 10 10 10 10-4.477 10-10z'/%3E%3Cpath d='M0 30c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10S0 35.523 0 30zm50 0c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10-4.477 10-10 10z'/%3E%3C/g%3E%3C/svg%3E")`,
-                    backgroundSize: '30px 30px'
-                  }}
-                />
-              </div>
-
               {/* Mystical glow */}
               <div className="absolute inset-0 bg-gradient-to-r from-amber-300/10 via-yellow-200/10 to-amber-300/10 animate-pulse" 
                    style={{ animationDuration: '4s' }} />
               
-              {/* Scroll header with ancient styling */}
+              {/* Scroll header */}
               <div className="relative p-6 border-b border-amber-600/30">
                 <div className="text-center">
                   <div className="text-4xl mb-2 filter drop-shadow-lg" style={{ 
@@ -105,7 +94,7 @@ const KajiPanel: React.FC<KajiPanelProps> = ({ isOpen, onClose, zone, project, q
                 </button>
               </div>
               
-              {/* Content with glowing serif */}
+              {/* Content */}
               <div className="relative p-8">
                 {loading ? (
                   <div className="text-center">

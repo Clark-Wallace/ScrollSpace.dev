@@ -15,7 +15,9 @@
       "Bash(git remote set-url:*)",
       "Bash(git push:*)",
       "Bash(rm:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": []
   }
