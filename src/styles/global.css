@@ -1,1 +1,45 @@
 @import "tailwindcss";
+
+/* Dark theme globals */
+body {
+  font-family: 'Space Mono', 'Courier New', monospace;
+  background-color: #000;
+  color: #e5e7eb;
+}
+
+/* Custom typography for scroll-style reading */
+.prose {
+  color: #d1d5db;
+  max-width: none;
+}
+
+.prose h1, .prose h2, .prose h3 {
+  color: #f9fafb;
+}
+
+.prose a {
+  color: #60a5fa;
+}
+
+.prose code {
+  background-color: #1f2937;
+  color: #34d399;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+
+.prose pre {
+  background-color: #111827;
+  border: 1px solid #374151;
+}
+
+/* Zone cards dark theme adjustments */
+.zone-card {
+  background: rgba(17, 24, 39, 0.8);
+  border: 1px solid #374151;
+}
+
+.zone-card:hover {
+  background: rgba(31, 41, 55, 0.9);
+  border-color: #60a5fa;
+}
