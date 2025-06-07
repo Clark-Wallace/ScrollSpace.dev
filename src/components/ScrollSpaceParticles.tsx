@@ -1,8 +1,7 @@
 // /src/components/ScrollSpaceParticles.tsx
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface Particle {
-  id: number;
   x: number;
   y: number;
   vx: number;
@@ -15,32 +14,9 @@ interface Particle {
 const ScrollSpaceParticles: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
-  const [particles, setParticles] = useState<Particle[]>([]);
+  const particlesRef = useRef<Particle[]>([]);
 
-  // Initialize particles
-  useEffect(() => {
-    const particleCount = 40; // Fixed count for consistency
-    const initialParticles: Particle[] = [];
-    
-    console.log('Initializing particles:', particleCount); // Debug log
-
-    for (let i = 0; i < particleCount; i++) {
-      initialParticles.push({
-        id: i,
-        x: Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 1920),
-        y: Math.random() * (typeof window !== 'undefined' ? window.innerHeight : 1080),
-        vx: (Math.random() - 0.5) * 2, // Much faster movement
-        vy: (Math.random() - 0.5) * 2,
-        size: Math.random() * 3 + 2, // 2-5px (bigger)
-        opacity: Math.random() * 0.6 + 0.2, // 0.2-0.8 (much more visible)
-        opacityDirection: Math.random() > 0.5 ? 1 : -1
-      });
-    }
-
-    setParticles(initialParticles);
-  }, []);
-
-  // Animation loop
+  // Initialize particles and animation
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -48,61 +24,71 @@ const ScrollSpaceParticles: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Set canvas size
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // Initialize particles
+    const particleCount = 40;
+    const particles: Particle[] = [];
+    
+    console.log('Initializing particles:', particleCount, 'Canvas size:', canvas.width, canvas.height);
+
+    for (let i = 0; i < particleCount; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 3, // Even faster
+        vy: (Math.random() - 0.5) * 3,
+        size: Math.random() * 4 + 3, // 3-7px (even bigger)
+        opacity: Math.random() * 0.6 + 0.4, // 0.4-1.0 (very visible)
+        opacityDirection: Math.random() > 0.5 ? 1 : -1
+      });
+    }
+
+    // Animation loop
     const animate = () => {
-      // Clear canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Clear canvas with slight trail effect
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // Update and draw particles
-      setParticles(prevParticles => 
-        prevParticles.map(particle => {
-          // Update position
-          let newX = particle.x + particle.vx;
-          let newY = particle.y + particle.vy;
+      particlesRef.current.forEach(particle => {
+        // Update position
+        particle.x += particle.vx;
+        particle.y += particle.vy;
 
-          // Wrap around screen edges
-          if (newX > canvas.width) newX = 0;
-          if (newX < 0) newX = canvas.width;
-          if (newY > canvas.height) newY = 0;
-          if (newY < 0) newY = canvas.height;
+        // Wrap around screen edges
+        if (particle.x > canvas.width) particle.x = 0;
+        if (particle.x < 0) particle.x = canvas.width;
+        if (particle.y > canvas.height) particle.y = 0;
+        if (particle.y < 0) particle.y = canvas.height;
 
-          // Update opacity for more noticeable pulsing
-          let newOpacity = particle.opacity + particle.opacityDirection * 0.01;
-          let newOpacityDirection = particle.opacityDirection;
-          
-          if (newOpacity > 0.8) {
-            newOpacity = 0.8;
-            newOpacityDirection = -1;
-          } else if (newOpacity < 0.2) {
-            newOpacity = 0.2;
-            newOpacityDirection = 1;
-          }
+        // Update opacity for pulsing
+        particle.opacity += particle.opacityDirection * 0.02;
+        
+        if (particle.opacity > 1) {
+          particle.opacity = 1;
+          particle.opacityDirection = -1;
+        } else if (particle.opacity < 0.3) {
+          particle.opacity = 0.3;
+          particle.opacityDirection = 1;
+        }
 
-          // Draw particle
-          ctx.beginPath();
-          ctx.arc(newX, newY, particle.size, 0, Math.PI * 2);
-          
-          // Enhanced gradient for stronger glow effect
-          const gradient = ctx.createRadialGradient(
-            newX, newY, 0,
-            newX, newY, particle.size * 4
-          );
-          gradient.addColorStop(0, `rgba(100, 255, 150, ${newOpacity})`); // Bright green center
-          gradient.addColorStop(0.3, `rgba(150, 255, 200, ${newOpacity * 0.8})`); // Light green
-          gradient.addColorStop(0.6, `rgba(200, 255, 255, ${newOpacity * 0.4})`); // Cyan
-          gradient.addColorStop(1, `rgba(100, 255, 150, 0)`); // Transparent edge
-          
-          ctx.fillStyle = gradient;
-          ctx.fill();
-
-          return {
-            ...particle,
-            x: newX,
-            y: newY,
-            opacity: newOpacity,
-            opacityDirection: newOpacityDirection
-          };
-        })
-      );
+        // Draw particle with glow
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        
+        // Simple bright fill first
+        ctx.fillStyle = `rgba(100, 255, 150, ${particle.opacity})`;
+        ctx.fill();
+        
+        // Add glow effect
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.size * 2, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(100, 255, 150, ${particle.opacity * 0.3})`;
+        ctx.fill();
+      });
 
       animationRef.current = requestAnimationFrame(animate);
     };
@@ -114,24 +100,6 @@ const ScrollSpaceParticles: React.FC = () => {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [particles.length]); // Only re-run when particle count changes
-
-  // Handle window resize
-  useEffect(() => {
-    const handleResize = () => {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-      }
-    };
-
-    handleResize(); // Set initial size
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
   }, []);
 
   return (
@@ -142,9 +110,8 @@ const ScrollSpaceParticles: React.FC = () => {
         zIndex: 0,
         width: '100vw',
         height: '100vh',
+        background: 'transparent'
       }}
-      width={typeof window !== 'undefined' ? window.innerWidth : 1920}
-      height={typeof window !== 'undefined' ? window.innerHeight : 1080}
     />
   );
 };
