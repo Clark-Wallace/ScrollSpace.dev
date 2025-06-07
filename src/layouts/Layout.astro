@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import ScrollSpaceParticles from '../components/ScrollSpaceParticles';
 
 export interface Props {
   title: string;
@@ -63,6 +64,12 @@ const { title, description = "A themepark for Humans and AIs" } = Astro.props;
     </style>
   </head>
   <body class="bg-black text-gray-200 min-h-screen font-mono antialiased">
-    <slot />
+    <!-- Particle system background -->
+    <ScrollSpaceParticles client:load />
+    
+    <!-- Main content with higher z-index -->
+    <div class="relative" style="z-index: 10;">
+      <slot />
+    </div>
   </body>
 </html>
