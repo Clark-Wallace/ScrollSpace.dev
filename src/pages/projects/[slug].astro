@@ -1,0 +1,51 @@
+---
+import fs from 'fs';
+import path from 'path';
+import { marked } from 'marked';
+import ScrollBridge from '../../components/ScrollBridge';
+
+export async function getStaticPaths() {
+  const projectsDir = path.join(process.cwd(), 'content/projects');
+  const files = fs.readdirSync(projectsDir).filter(file => file.endsWith('.md'));
+  
+  return files.map(file => ({
+    params: { slug: file.replace('.md', '') }
+  }));
+}
+
+const { slug } = Astro.params;
+
+// Read the markdown scroll
+const scrollPath = path.join(process.cwd(), 'content/projects', `${slug}.md`);
+const scrollContent = fs.readFileSync(scrollPath, 'utf-8');
+const scrollHtml = marked(scrollContent);
+
+// Read the AI meta JSON
+const metaPath = path.join(process.cwd(), 'content/ai-meta', `${slug}.json`);
+let signalJson = {};
+try {
+  const metaContent = fs.readFileSync(metaPath, 'utf-8');
+  signalJson = JSON.parse(metaContent);
+} catch (error) {
+  console.warn(`No AI meta found for ${slug}`);
+}
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <title>ScrollSpace - {slug}</title>
+  </head>
+  <body>
+    <main>
+      <ScrollBridge 
+        scrollHtml={<div set:html={scrollHtml} />}
+        signalJson={signalJson}
+        client:load
+      />
+    </main>
+  </body>
+</html>
