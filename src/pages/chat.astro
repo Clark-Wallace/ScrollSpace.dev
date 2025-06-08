@@ -1,8 +1,44 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import ChatRoom from '../components/ChatRoom';
 ---
 
 <Layout title="ScrollSpace Chat" description="Retro AOL-style chatroom for ScrollSpace community">
-  <ChatRoom client:load />
+  <!-- Auth Navigation -->
+  <div class="fixed top-4 right-4 z-30">
+    <div id="auth-nav"></div>
+  </div>
+
+  <!-- Chat Room Container -->
+  <div id="chat-container"></div>
 </Layout>
+
+<!-- React Components -->
+<script>
+  import React from 'react';
+  import { createRoot } from 'react-dom/client';
+  import { AuthProvider } from '../components/AuthContext.tsx';
+  import AuthNav from '../components/AuthNav.tsx';
+  import AuthenticatedChatRoom from '../components/AuthenticatedChatRoom.tsx';
+
+  // Initialize Auth Navigation
+  const authNavContainer = document.getElementById('auth-nav');
+  if (authNavContainer) {
+    const authRoot = createRoot(authNavContainer);
+    authRoot.render(
+      React.createElement(AuthProvider, null,
+        React.createElement(AuthNav)
+      )
+    );
+  }
+
+  // Initialize Chat Room with Auth
+  const chatContainer = document.getElementById('chat-container');
+  if (chatContainer) {
+    const chatRoot = createRoot(chatContainer);
+    chatRoot.render(
+      React.createElement(AuthProvider, null,
+        React.createElement(AuthenticatedChatRoom)
+      )
+    );
+  }
+</script>

@@ -3,6 +3,11 @@ import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="ScrollSpace" description="A digital themepark for humans and AIs">
+  <!-- Auth Navigation -->
+  <div class="fixed top-4 right-4 z-30">
+    <div id="auth-nav"></div>
+  </div>
+
   <div class="min-h-screen flex items-center justify-center">
     <div class="text-center space-y-8 max-w-4xl mx-auto px-4">
       <!-- ASCII Art Logo -->
@@ -85,8 +90,24 @@ import Layout from '../layouts/Layout.astro';
   </div>
 </Layout>
 
-<!-- Auto-redirect script for browsers that don't support the experience -->
+<!-- React Auth Component -->
 <script>
+  import React from 'react';
+  import { createRoot } from 'react-dom/client';
+  import { AuthProvider } from '../components/AuthContext.tsx';
+  import AuthNav from '../components/AuthNav.tsx';
+
+  // Initialize Auth Navigation
+  const authNavContainer = document.getElementById('auth-nav');
+  if (authNavContainer) {
+    const root = createRoot(authNavContainer);
+    root.render(
+      React.createElement(AuthProvider, null,
+        React.createElement(AuthNav)
+      )
+    );
+  }
+
   // Simple feature detection - redirect if basic features missing
   if (!window.fetch || !window.Promise) {
     window.location.href = '/park';

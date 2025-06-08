@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { chatAPI, type ChatMessage, type ChatUser, type SignalFragment } from '../lib/supabase';
+import { chatAPI, type ChatMessage, type ChatUser, type SignalFragment, authAPI } from '../lib/supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import SignalFragment from './SignalFragment';
 import FragmentModal from './FragmentModal';
 import { selectRandomFragment, generateFragmentId, personalizeFragment, shouldDropFragment } from '../lib/fragmentContent';
 import { autoSetup } from '../lib/setupDatabase';
+import { useAuth } from './AuthContext';
+import AuthForm from './AuthForm';
 
-const ChatRoom: React.FC = () => {
+const AuthenticatedChatRoom: React.FC = () => {
+  const { user, profile, loading: authLoading } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [users, setUsers] = useState<ChatUser[]>([]);
   const [currentMessage, setCurrentMessage] = useState('');
-  const [username, setUsername] = useState('');
-  const [isJoined, setIsJoined] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAuthForm, setShowAuthForm] = useState(false);
   
   // Signal Fragment state
   const [activeFragments, setActiveFragments] = useState<SignalFragment[]>([]);
@@ -34,16 +36,18 @@ const ChatRoom: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Focus input when joined
+  // Focus input when user is authenticated
   useEffect(() => {
-    if (isJoined && chatInputRef.current) {
+    if (user && profile && chatInputRef.current) {
       chatInputRef.current.focus();
     }
-  }, [isJoined]);
+  }, [user, profile]);
 
   // Load initial chat data and set up subscriptions
   useEffect(() => {
-    loadInitialData();
+    if (user && profile) {
+      joinChat();
+    }
     
     return () => {
       // Clean up subscriptions
@@ -57,24 +61,24 @@ const ChatRoom: React.FC = () => {
         fragmentSubscription.current.unsubscribe();
       }
     };
-  }, []);
+  }, [user, profile]);
 
   // Handle leaving chat when component unmounts or user leaves
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (isJoined && username) {
-        chatAPI.leaveChat(username);
+      if (user && profile) {
+        leaveChat();
       }
     };
 
     const handleVisibilityChange = () => {
-      if (document.hidden && isJoined && username) {
-        // Page is hidden, user might be leaving
-        chatAPI.updateUserStatus(username, 'away');
-      } else if (!document.hidden && isJoined && username) {
-        // Page is visible again
-        chatAPI.updateUserStatus(username, 'online');
-        chatAPI.updateHeartbeat(username);
+      if (user && profile) {
+        if (document.hidden) {
+          chatAPI.updateUserStatus(profile.username, 'away');
+        } else {
+          chatAPI.updateUserStatus(profile.username, 'online');
+          chatAPI.updateHeartbeat(profile.username);
+        }
       }
     };
 
@@ -84,18 +88,18 @@ const ChatRoom: React.FC = () => {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (isJoined && username) {
-        chatAPI.leaveChat(username);
+      if (user && profile) {
+        leaveChat();
       }
     };
-  }, [isJoined, username]);
+  }, [user, profile]);
 
   // Set up heartbeat and cleanup intervals when user joins
   useEffect(() => {
-    if (isJoined && username) {
+    if (user && profile) {
       // Send heartbeat every 30 seconds
       heartbeatInterval.current = setInterval(() => {
-        chatAPI.updateHeartbeat(username);
+        chatAPI.updateHeartbeat(profile.username);
       }, 30000);
 
       // Clean up inactive users every 2 minutes
@@ -122,12 +126,20 @@ const ChatRoom: React.FC = () => {
         clearInterval(fragmentDropInterval.current);
       }
     };
-  }, [isJoined, username]);
+  }, [user, profile]);
 
-  const loadInitialData = async () => {
+  const joinChat = async () => {
+    if (!user || !profile) return;
+
+    setIsConnecting(true);
+    setError(null);
+
     try {
       // Auto-setup database if needed
       await autoSetup();
+      
+      // Join chat with authenticated user info
+      await chatAPI.joinChat(profile.username);
       
       // Load recent messages
       const recentMessages = await chatAPI.getMessages(50);
@@ -149,8 +161,23 @@ const ChatRoom: React.FC = () => {
       setupRealtimeSubscriptions();
       
     } catch (error) {
-      console.error('Failed to load initial data:', error);
+      console.error('Failed to join chat:', error);
       setError('Failed to connect to chat server. Please check your connection and Supabase configuration.');
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const leaveChat = async () => {
+    if (!profile) return;
+    
+    try {
+      await chatAPI.leaveChat(profile.username);
+      if (user) {
+        await authAPI.updateUserPresence(user.id, false);
+      }
+    } catch (error) {
+      console.error('Error leaving chat:', error);
     }
   };
 
@@ -175,43 +202,8 @@ const ChatRoom: React.FC = () => {
     });
   };
 
-  const joinChat = async () => {
-    if (!username.trim()) {
-      alert('Please enter a callsign!');
-      return;
-    }
-
-    setIsConnecting(true);
-    setError(null);
-
-    try {
-      await chatAPI.joinChat(username);
-      setIsJoined(true);
-    } catch (error: any) {
-      console.error('Failed to join chat:', error);
-      if (error.message === 'Username already taken') {
-        alert('Callsign already in use! Choose another identity.');
-      } else {
-        setError('Neural link failed. Check matrix connection.');
-      }
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  const leaveChat = async () => {
-    try {
-      await chatAPI.leaveChat(username);
-    } catch (error) {
-      console.error('Error leaving chat:', error);
-    } finally {
-      setIsJoined(false);
-      setUsername('');
-    }
-  };
-
   const sendMessage = async () => {
-    if (!currentMessage.trim()) return;
+    if (!currentMessage.trim() || !profile) return;
 
     // Handle commands locally
     if (currentMessage.startsWith('/')) {
@@ -224,7 +216,7 @@ const ChatRoom: React.FC = () => {
     setCurrentMessage('');
 
     try {
-      await chatAPI.sendMessage(username, messageText);
+      await chatAPI.sendMessage(profile.username, messageText);
     } catch (error) {
       console.error('Failed to send message:', error);
       // Re-add the message to the input if it failed
@@ -234,6 +226,8 @@ const ChatRoom: React.FC = () => {
   };
 
   const handleCommand = async (command: string) => {
+    if (!profile) return;
+    
     const cmd = command.toLowerCase();
     
     const addLocalMessage = (message: string) => {
@@ -248,10 +242,12 @@ const ChatRoom: React.FC = () => {
     };
     
     if (cmd === '/help') {
-      addLocalMessage('[SYS] Available protocols: /help, /users, /time, /clear, /away, /back, /cleanup, /matrix, /fragments, /pickup <id>, /drop');
+      addLocalMessage('[SYS] Available protocols: /help, /users, /time, /clear, /away, /back, /cleanup, /matrix, /fragments, /pickup <id>, /drop, /profile');
     } else if (cmd === '/users') {
       const userList = users.map(u => `${u.username} (${u.status})`).join(', ');
       addLocalMessage(`[NET] Active nodes: ${userList}`);
+    } else if (cmd === '/profile') {
+      addLocalMessage(`[PROFILE] Neural ID: ${profile.username} | Fragments: ${profile.total_fragments} | Rare: ${profile.rare_fragments} | Status: ${profile.is_online ? 'ONLINE' : 'OFFLINE'}`);
     } else if (cmd === '/time') {
       addLocalMessage(`[CLOCK] Matrix time: ${new Date().toLocaleString()}`);
     } else if (cmd === '/clear') {
@@ -259,14 +255,14 @@ const ChatRoom: React.FC = () => {
       addLocalMessage('[SYS] Terminal buffer cleared');
     } else if (cmd === '/away') {
       try {
-        await chatAPI.updateUserStatus(username, 'away');
+        await chatAPI.updateUserStatus(profile.username, 'away');
         addLocalMessage('[STATUS] Stealth mode: ACTIVE');
       } catch (error) {
         addLocalMessage('[ERROR] Status update failed');
       }
     } else if (cmd === '/back') {
       try {
-        await chatAPI.updateUserStatus(username, 'online');
+        await chatAPI.updateUserStatus(profile.username, 'online');
         addLocalMessage('[STATUS] Neural link: RESTORED');
       } catch (error) {
         addLocalMessage('[ERROR] Status update failed');
@@ -282,7 +278,7 @@ const ChatRoom: React.FC = () => {
       addLocalMessage('[SYSTEM] Welcome to the ScrollSpace Matrix, choom. Reality is just another ICE to break.');
     } else if (cmd === '/fragments') {
       try {
-        const userFragments = await chatAPI.getUserFragments(username);
+        const userFragments = await chatAPI.getUserFragments(profile.username);
         if (userFragments.length === 0) {
           addLocalMessage('[FRAGMENT] No data shards in your collection.');
         } else {
@@ -310,31 +306,10 @@ const ChatRoom: React.FC = () => {
     }
   };
 
-  const formatTime = (date: Date | string) => {
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
-    return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'online': return 'bg-green-400';
-      case 'away': return 'bg-yellow-400';
-      case 'busy': return 'bg-red-400';
-      default: return 'bg-gray-400';
-    }
-  };
-
-  const getMessageColor = (type: string) => {
-    switch (type) {
-      case 'system': return 'text-purple-400';
-      case 'join': return 'text-green-400';
-      case 'leave': return 'text-red-400';
-      default: return 'text-black';
-    }
-  };
-
   // Signal Fragment functions
   const dropRandomFragment = async () => {
+    if (!profile) return;
+    
     try {
       const template = selectRandomFragment();
       const fragmentId = generateFragmentId();
@@ -342,11 +317,7 @@ const ChatRoom: React.FC = () => {
       
       let content = template.content;
       if (template.type === 'personalized') {
-        // Pick a random online user for personalization
-        const randomUser = users[Math.floor(Math.random() * users.length)];
-        if (randomUser) {
-          content = personalizeFragment(content, randomUser.username);
-        }
+        content = personalizeFragment(content, profile.username);
       }
 
       await chatAPI.dropFragment({
@@ -373,12 +344,22 @@ const ChatRoom: React.FC = () => {
   };
 
   const handleFragmentPickup = async (fragmentId: string) => {
+    if (!profile || !user) return;
+    
     try {
-      const fragment = await chatAPI.pickupFragment(fragmentId, username);
+      const fragment = await chatAPI.pickupFragment(fragmentId, profile.username);
       setClaimedFragment(fragment);
       setShowFragmentModal(true);
       
-      // Remove from active fragments locally (will be updated by subscription too)
+      // Update user's fragment count
+      await authAPI.updateUserProfile(user.id, {
+        total_fragments: profile.total_fragments + 1,
+        rare_fragments: ['rare', 'encrypted', 'corrupted'].includes(fragment.rarity) 
+          ? profile.rare_fragments + 1 
+          : profile.rare_fragments
+      });
+      
+      // Remove from active fragments locally
       setActiveFragments(prev => prev.filter(f => f.fragment_id !== fragmentId));
     } catch (error) {
       console.error('Failed to pickup fragment:', error);
@@ -398,108 +379,70 @@ const ChatRoom: React.FC = () => {
     setActiveFragments(prev => prev.filter(f => f.fragment_id !== fragmentId));
   };
 
-  if (!isJoined) {
+  const formatTime = (date: Date | string) => {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'online': return 'bg-green-400';
+      case 'away': return 'bg-yellow-400';
+      case 'busy': return 'bg-red-400';
+      default: return 'bg-gray-400';
+    }
+  };
+
+  const getMessageColor = (type: string) => {
+    switch (type) {
+      case 'system': return 'text-purple-400';
+      case 'join': return 'text-green-400';
+      case 'leave': return 'text-red-400';
+      default: return 'text-black';
+    }
+  };
+
+  // Show auth form if user is not logged in
+  if (authLoading) {
     return (
-      <div className="min-h-screen bg-transparent text-white p-6">
-        <div className="max-w-md mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-black/80 backdrop-blur-sm border border-green-400 shadow-lg" 
-            style={{ 
-              boxShadow: '0 0 20px rgba(0, 255, 65, 0.5), inset 1px 1px 0px rgba(0, 255, 65, 0.2), inset -1px -1px 0px rgba(0, 0, 0, 0.8)',
-              fontFamily: 'Courier New, monospace'
-            }}
-          >
-            {/* Terminal Header */}
-            <div className="bg-black border-b border-green-400 p-2 relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-green-400/10 to-transparent animate-pulse"></div>
-              <div className="flex items-center space-x-2 relative z-10">
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                </div>
-                <span className="text-xs font-mono text-green-400 tracking-wider">
-                  [SECURE_NET] SCROLLSPACE_TERMINAL v2.1.98
-                </span>
-              </div>
-            </div>
-            
-            <div className="p-4 bg-black/50 relative">
-              {/* Scanlines Effect */}
-              <div className="absolute inset-0 pointer-events-none" style={{
-                background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 255, 65, 0.03) 2px, rgba(0, 255, 65, 0.03) 4px)'
-              }}></div>
-              
-              <div className="relative z-10">
-                <div className="mb-4">
-                  <div className="text-green-400 text-xs font-mono mb-2 animate-pulse">
-                    &gt;&gt; NEURAL_LINK_ESTABLISHED
-                  </div>
-                  <h2 className="text-sm font-mono text-green-400 mb-1 tracking-wider">
-                    === ENTER THE NET ===
-                  </h2>
-                  <div className="text-xs text-green-300 font-mono opacity-80">
-                    Matrix protocol active | ICE firewall bypassed
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <div className="text-xs font-mono text-green-400 mb-1 tracking-wider">
-                      &gt; CALLSIGN_INPUT:
-                    </div>
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && !isConnecting && joinChat()}
-                      className="w-full px-2 py-1 bg-black border border-green-400 text-green-400 text-sm font-mono focus:border-green-300 focus:outline-none focus:shadow-lg" 
-                      style={{ 
-                        borderStyle: 'inset',
-                        boxShadow: 'inset 0 0 10px rgba(0, 255, 65, 0.2)'
-                      }}
-                      placeholder="enter_callsign..."
-                      maxLength={20}
-                      disabled={isConnecting}
-                    />
-                  </div>
-                  
-                  <motion.button
-                    onClick={joinChat}
-                    disabled={isConnecting}
-                    className="w-full bg-black hover:bg-green-900/30 border border-green-400 text-green-400 font-mono py-2 text-sm transition-all duration-200"
-                    style={{ 
-                      borderStyle: 'outset',
-                      boxShadow: '0 0 10px rgba(0, 255, 65, 0.3)'
-                    }}
-                    whileHover={{ 
-                      scale: isConnecting ? 1 : 1.02,
-                      boxShadow: '0 0 20px rgba(0, 255, 65, 0.6)'
-                    }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    {isConnecting ? '&gt;&gt; ESTABLISHING_LINK...' : '&gt;&gt; JACK_IN'}
-                  </motion.button>
-                  
-                  {error && (
-                    <div className="text-red-400 text-xs font-mono text-center border border-red-400 p-2 bg-red-900/20 animate-pulse">
-                      ERROR: {error.toUpperCase()}
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-4 text-center text-xs text-green-400 font-mono opacity-60">
-                  <div className="border-t border-green-400/30 pt-2">
-                    <p>[ NETIQUETTE_PROTOCOLS_ACTIVE ]</p>
-                    <p className="mt-1">Signal spirits monitoring • ICE protection enabled</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
+      <div className="min-h-screen bg-transparent text-white p-6 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border border-green-400 rounded-full animate-spin border-t-transparent mx-auto mb-4"></div>
+          <div className="text-green-400 font-mono text-sm">INITIALIZING_NEURAL_LINK...</div>
         </div>
+      </div>
+    );
+  }
+
+  if (!user || !profile) {
+    return (
+      <div className="min-h-screen bg-transparent text-white p-6 flex items-center justify-center">
+        <div className="text-center space-y-6 max-w-md mx-auto">
+          <div className="bg-black/80 backdrop-blur-sm border border-green-400 shadow-lg p-6" 
+               style={{ 
+                 boxShadow: '0 0 20px rgba(0, 255, 65, 0.5), inset 1px 1px 0px rgba(0, 255, 65, 0.2), inset -1px -1px 0px rgba(0, 0, 0, 0.8)',
+                 fontFamily: 'Courier New, monospace'
+               }}>
+            <div className="text-green-400 text-sm font-mono mb-4">
+              >> AUTHENTICATED_ACCESS_REQUIRED
+            </div>
+            <p className="text-green-300 font-mono text-sm mb-6">
+              Neural link authentication required to access the ScrollSpace Matrix chat system.
+            </p>
+            <button
+              onClick={() => setShowAuthForm(true)}
+              className="w-full bg-green-600 hover:bg-green-500 text-black font-mono font-bold py-2 text-sm transition-all"
+            >
+              ESTABLISH_NEURAL_LINK
+            </button>
+          </div>
+        </div>
+        
+        <AuthForm 
+          isOpen={showAuthForm} 
+          onClose={() => setShowAuthForm(false)}
+          initialMode="login"
+        />
       </div>
     );
   }
@@ -534,31 +477,16 @@ const ChatRoom: React.FC = () => {
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 </div>
                 <span className="text-xs font-mono text-green-400 tracking-wider">
-                  [NEURAL_NET] {username}@scrollspace.matrix
+                  [NEURAL_NET] {profile.username}@scrollspace.matrix
                 </span>
               </div>
               <div className="flex items-center space-x-3">
                 <span className="text-xs font-mono text-green-400 hidden md:inline">
-                  USERS_ONLINE: {users.length} | SIGNAL_STRENGTH: 98%
+                  USERS_ONLINE: {users.length} | FRAGMENTS: {profile.total_fragments}
                 </span>
                 <span className="text-xs font-mono text-green-400 md:hidden">
-                  USERS: {users.length}
+                  USERS: {users.length} | FRAGS: {profile.total_fragments}
                 </span>
-                <motion.button
-                  onClick={leaveChat}
-                  className="bg-black hover:bg-red-900/50 border border-red-400 text-red-400 px-2 py-1 text-xs font-mono transition-all"
-                  style={{ 
-                    borderStyle: 'outset',
-                    boxShadow: '0 0 5px rgba(255, 0, 0, 0.3)'
-                  }}
-                  whileHover={{ 
-                    scale: 1.05,
-                    boxShadow: '0 0 15px rgba(255, 0, 0, 0.6)'
-                  }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  DISCONNECT
-                </motion.button>
               </div>
             </div>
           </div>
@@ -586,10 +514,10 @@ const ChatRoom: React.FC = () => {
                   &gt;&gt;&gt; NEURAL_LINK_ESTABLISHED_TO: "SCROLLSPACE_MATRIX" &lt;&lt;&lt;
                 </div>
                 <div className="mb-2 text-green-400 text-xs">
-                  [SYSTEM] Welcome to the ScrollSpace underground network, choom.
+                  [SYSTEM] Welcome {profile.display_name || profile.username}, choom. Neural signature verified.
                 </div>
                 <div className="mb-2 text-cyan-400 text-xs">
-                  [ICE] Firewall status: BYPASSED | Trace protection: ACTIVE
+                  [ICE] Authentication: VERIFIED | Fragment collection: {profile.total_fragments} shards
                 </div>
                 
                 <AnimatePresence>
@@ -603,7 +531,7 @@ const ChatRoom: React.FC = () => {
                       {msg.type === 'message' && (
                         <div className="flex">
                           <span className="text-cyan-400 text-xs mr-1">[{formatTime(msg.timestamp)}]</span>
-                          <span className={msg.username === username ? 'text-yellow-400 font-bold' : 'text-cyan-400 font-bold'}>
+                          <span className={msg.username === profile.username ? 'text-yellow-400 font-bold' : 'text-cyan-400 font-bold'}>
                             {msg.username}@net:
                           </span>
                           <span className="text-green-300 ml-1">{msg.message}</span>
@@ -707,10 +635,10 @@ const ChatRoom: React.FC = () => {
                       user.status === 'away' ? 'bg-yellow-400' : 'bg-red-400'
                     }`}></div>
                     <span className={`text-xs font-mono ${
-                      user.username === username ? 'text-yellow-400 font-bold' : 'text-cyan-400'
+                      user.username === profile.username ? 'text-yellow-400 font-bold' : 'text-cyan-400'
                     }`}>
                       {user.username}
-                      {user.username === username && '@local'}
+                      {user.username === profile.username && '@local'}
                     </span>
                   </motion.div>
                 ))}
@@ -726,7 +654,7 @@ const ChatRoom: React.FC = () => {
         
         {/* Status Terminal */}
         <div className="mt-2 text-xs text-green-400 font-mono text-center opacity-80">
-          [STATUS] MATRIX_CONNECTION_STABLE | ENCRYPTION_LEVEL_5 | SIGNAL_SPIRITS_MONITORING
+          [STATUS] NEURAL_LINK_VERIFIED | IDENTITY: {profile.username} | FRAGMENTS: {profile.total_fragments}
         </div>
       </div>
       
@@ -740,4 +668,4 @@ const ChatRoom: React.FC = () => {
   );
 };
 
-export default ChatRoom;
+export default AuthenticatedChatRoom;

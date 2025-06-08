@@ -10,7 +10,7 @@ import Layout from '../layouts/Layout.astro';
           SCROLLSPACE_DATABASE_SETUP
         </h1>
         <p class="text-gray-300 font-mono">
-          Initialize Signal Fragments system in your Supabase project
+          Initialize authentication and Signal Fragments system in your Supabase project
         </p>
       </div>
 
@@ -31,7 +31,48 @@ import Layout from '../layouts/Layout.astro';
           <div class="border-l-2 border-green-400 pl-4">
             <p class="text-green-300 font-bold">3. Copy and Run This SQL:</p>
             <div class="bg-black border border-gray-600 p-4 mt-2 overflow-x-auto">
-              <pre class="text-xs text-gray-300"><code>-- Signal Fragments Tables
+              <pre class="text-xs text-gray-300"><code>-- Enable Row Level Security
+ALTER TABLE auth.users ENABLE ROW LEVEL SECURITY;
+
+-- Create user_profiles table
+CREATE TABLE IF NOT EXISTS user_profiles (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE NOT NULL,
+  username TEXT UNIQUE NOT NULL,
+  display_name TEXT,
+  avatar_url TEXT,
+  bio TEXT,
+  total_fragments INTEGER DEFAULT 0,
+  rare_fragments INTEGER DEFAULT 0,
+  joined_at TIMESTAMPTZ DEFAULT NOW(),
+  last_seen TIMESTAMPTZ DEFAULT NOW(),
+  is_online BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create chat_messages table (updated with user_id)
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  username TEXT NOT NULL,
+  message TEXT NOT NULL,
+  type TEXT DEFAULT 'message' CHECK (type IN ('message', 'join', 'leave', 'system')),
+  timestamp TIMESTAMPTZ NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create chat_users table (updated with user_id)
+CREATE TABLE IF NOT EXISTS chat_users (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
+  status TEXT DEFAULT 'online' CHECK (status IN ('online', 'away', 'busy')),
+  last_seen TIMESTAMPTZ DEFAULT NOW(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create signal_fragments table (updated with user_id)
 CREATE TABLE IF NOT EXISTS signal_fragments (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   fragment_id TEXT UNIQUE NOT NULL,
@@ -40,38 +81,75 @@ CREATE TABLE IF NOT EXISTS signal_fragments (
   rarity TEXT DEFAULT 'common' CHECK (rarity IN ('common', 'rare', 'encrypted', 'corrupted')),
   available BOOLEAN DEFAULT true,
   claimed_by TEXT,
+  claimed_by_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   claimed_at TIMESTAMPTZ,
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Create fragment_pickups table for logging (updated with user_id)
 CREATE TABLE IF NOT EXISTS fragment_pickups (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   fragment_id TEXT NOT NULL,
   username TEXT NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  content TEXT NOT NULL,
+  rarity TEXT NOT NULL,
   picked_up_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Enable Row Level Security
+ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE signal_fragments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fragment_pickups ENABLE ROW LEVEL SECURITY;
 
--- Create Policies
+-- User profile policies
+CREATE POLICY "Users can view all profiles" ON user_profiles FOR SELECT USING (true);
+CREATE POLICY "Users can insert their own profile" ON user_profiles FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own profile" ON user_profiles FOR UPDATE USING (auth.uid() = user_id);
+
+-- Chat message policies (public access for now)
+CREATE POLICY "Anyone can read messages" ON chat_messages FOR SELECT USING (true);
+CREATE POLICY "Anyone can insert messages" ON chat_messages FOR INSERT WITH CHECK (true);
+
+-- Chat user policies  
+CREATE POLICY "Anyone can read users" ON chat_users FOR SELECT USING (true);
+CREATE POLICY "Anyone can insert users" ON chat_users FOR INSERT WITH CHECK (true);
+CREATE POLICY "Anyone can update users" ON chat_users FOR UPDATE USING (true);
+CREATE POLICY "Anyone can delete users" ON chat_users FOR DELETE USING (true);
+
+-- Signal fragment policies
 CREATE POLICY "Anyone can read fragments" ON signal_fragments FOR SELECT USING (true);
 CREATE POLICY "Anyone can insert fragments" ON signal_fragments FOR INSERT WITH CHECK (true);
 CREATE POLICY "Anyone can update fragments" ON signal_fragments FOR UPDATE USING (true);
 CREATE POLICY "Anyone can delete fragments" ON signal_fragments FOR DELETE USING (true);
 
+-- Fragment pickup policies
 CREATE POLICY "Anyone can read pickups" ON fragment_pickups FOR SELECT USING (true);
 CREATE POLICY "Anyone can insert pickups" ON fragment_pickups FOR INSERT WITH CHECK (true);
 
--- Create Indexes
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_username ON user_profiles(username);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_is_online ON user_profiles(is_online);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_user_id ON chat_messages(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_users_username ON chat_users(username);
+CREATE INDEX IF NOT EXISTS idx_chat_users_status ON chat_users(status);
+CREATE INDEX IF NOT EXISTS idx_chat_users_user_id ON chat_users(user_id);
 CREATE INDEX IF NOT EXISTS idx_signal_fragments_fragment_id ON signal_fragments(fragment_id);
 CREATE INDEX IF NOT EXISTS idx_signal_fragments_available ON signal_fragments(available);
 CREATE INDEX IF NOT EXISTS idx_signal_fragments_expires_at ON signal_fragments(expires_at);
+CREATE INDEX IF NOT EXISTS idx_signal_fragments_claimed_by_user_id ON signal_fragments(claimed_by_user_id);
 CREATE INDEX IF NOT EXISTS idx_fragment_pickups_username ON fragment_pickups(username);
+CREATE INDEX IF NOT EXISTS idx_fragment_pickups_user_id ON fragment_pickups(user_id);
 
--- Enable Realtime
+-- Enable realtime for all tables
+ALTER PUBLICATION supabase_realtime ADD TABLE user_profiles;
+ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
+ALTER PUBLICATION supabase_realtime ADD TABLE chat_users;
 ALTER PUBLICATION supabase_realtime ADD TABLE signal_fragments;
 ALTER PUBLICATION supabase_realtime ADD TABLE fragment_pickups;</code></pre>
             </div>
@@ -84,13 +162,19 @@ ALTER PUBLICATION supabase_realtime ADD TABLE fragment_pickups;</code></pre>
           </div>
 
           <div class="border-l-2 border-green-400 pl-4">
-            <p class="text-green-300 font-bold">4. Enable Realtime</p>
-            <p class="text-gray-300">Go to Database → Replication</p>
-            <p class="text-gray-300">Enable realtime for: signal_fragments, fragment_pickups</p>
+            <p class="text-green-300 font-bold">4. Enable Authentication Providers</p>
+            <p class="text-gray-300">Go to Authentication → Providers</p>
+            <p class="text-gray-300">Enable: Email, GitHub, Google (optional)</p>
           </div>
 
           <div class="border-l-2 border-green-400 pl-4">
-            <p class="text-green-300 font-bold">5. Test Connection</p>
+            <p class="text-green-300 font-bold">5. Enable Realtime</p>
+            <p class="text-gray-300">Go to Database → Replication</p>
+            <p class="text-gray-300">Enable realtime for: user_profiles, chat_messages, chat_users, signal_fragments, fragment_pickups</p>
+          </div>
+
+          <div class="border-l-2 border-green-400 pl-4">
+            <p class="text-green-300 font-bold">6. Test Connection</p>
             <button 
               onclick="testConnection()" 
               class="bg-blue-900 hover:bg-blue-800 border border-blue-400 text-blue-400 px-4 py-2 text-xs transition-all"
@@ -103,7 +187,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE fragment_pickups;</code></pre>
 
         <div class="mt-6 pt-4 border-t border-green-400">
           <p class="text-green-400 text-sm">
-            ✅ Once setup is complete, Signal Fragments will automatically appear in chat!
+            ✅ Once setup is complete, users can create accounts and Signal Fragments will automatically appear in authenticated chat!
           </p>
           <a 
             href="/chat" 
