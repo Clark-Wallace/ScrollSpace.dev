@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { chatAPI, type ChatMessage, type ChatUser } from '../lib/supabase';
+import { chatAPI, type ChatMessage, type ChatUser, type SignalFragment } from '../lib/supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import SignalFragment from './SignalFragment';
+import FragmentModal from './FragmentModal';
+import { selectRandomFragment, generateFragmentId, personalizeFragment, shouldDropFragment } from '../lib/fragmentContent';
+import { autoSetup } from '../lib/setupDatabase';
 
 const ChatRoom: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -11,12 +15,19 @@ const ChatRoom: React.FC = () => {
   const [isJoined, setIsJoined] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Signal Fragment state
+  const [activeFragments, setActiveFragments] = useState<SignalFragment[]>([]);
+  const [claimedFragment, setClaimedFragment] = useState<SignalFragment | null>(null);
+  const [showFragmentModal, setShowFragmentModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const messageSubscription = useRef<RealtimeChannel | null>(null);
   const userSubscription = useRef<RealtimeChannel | null>(null);
+  const fragmentSubscription = useRef<RealtimeChannel | null>(null);
   const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
   const cleanupInterval = useRef<NodeJS.Timeout | null>(null);
+  const fragmentDropInterval = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -41,6 +52,9 @@ const ChatRoom: React.FC = () => {
       }
       if (userSubscription.current) {
         userSubscription.current.unsubscribe();
+      }
+      if (fragmentSubscription.current) {
+        fragmentSubscription.current.unsubscribe();
       }
     };
   }, []);
@@ -88,6 +102,13 @@ const ChatRoom: React.FC = () => {
       cleanupInterval.current = setInterval(() => {
         chatAPI.cleanupInactiveUsers();
       }, 120000);
+
+      // Random fragment drops every 1-3 minutes
+      fragmentDropInterval.current = setInterval(async () => {
+        if (shouldDropFragment()) {
+          await dropRandomFragment();
+        }
+      }, 60000); // Check every minute
     }
 
     return () => {
@@ -97,11 +118,17 @@ const ChatRoom: React.FC = () => {
       if (cleanupInterval.current) {
         clearInterval(cleanupInterval.current);
       }
+      if (fragmentDropInterval.current) {
+        clearInterval(fragmentDropInterval.current);
+      }
     };
   }, [isJoined, username]);
 
   const loadInitialData = async () => {
     try {
+      // Auto-setup database if needed
+      await autoSetup();
+      
       // Load recent messages
       const recentMessages = await chatAPI.getMessages(50);
       const formattedMessages = recentMessages.map(msg => ({
@@ -113,6 +140,10 @@ const ChatRoom: React.FC = () => {
       // Load online users
       const onlineUsers = await chatAPI.getOnlineUsers();
       setUsers(onlineUsers);
+
+      // Load active fragments
+      const fragments = await chatAPI.getActiveFragments();
+      setActiveFragments(fragments);
 
       // Set up real-time subscriptions
       setupRealtimeSubscriptions();
@@ -136,6 +167,11 @@ const ChatRoom: React.FC = () => {
     // Subscribe to user presence changes
     userSubscription.current = chatAPI.subscribeToUsers((users) => {
       setUsers(users);
+    });
+
+    // Subscribe to fragment changes
+    fragmentSubscription.current = chatAPI.subscribeToFragments((fragments) => {
+      setActiveFragments(fragments);
     });
   };
 
@@ -212,7 +248,7 @@ const ChatRoom: React.FC = () => {
     };
     
     if (cmd === '/help') {
-      addLocalMessage('[SYS] Available protocols: /help, /users, /time, /clear, /away, /back, /cleanup, /matrix');
+      addLocalMessage('[SYS] Available protocols: /help, /users, /time, /clear, /away, /back, /cleanup, /matrix, /fragments, /drop');
     } else if (cmd === '/users') {
       const userList = users.map(u => `${u.username} (${u.status})`).join(', ');
       addLocalMessage(`[NET] Active nodes: ${userList}`);
@@ -244,6 +280,31 @@ const ChatRoom: React.FC = () => {
       }
     } else if (cmd === '/matrix') {
       addLocalMessage('[SYSTEM] Welcome to the ScrollSpace Matrix, choom. Reality is just another ICE to break.');
+    } else if (cmd === '/fragments') {
+      try {
+        const userFragments = await chatAPI.getUserFragments(username);
+        if (userFragments.length === 0) {
+          addLocalMessage('[FRAGMENT] No data shards in your collection.');
+        } else {
+          addLocalMessage(`[FRAGMENT] You have collected ${userFragments.length} data shards:`);
+          userFragments.forEach((frag, i) => {
+            addLocalMessage(`  ${i + 1}. ${frag.fragment_id} (${frag.rarity}) - ${frag.content_type}`);
+          });
+        }
+      } catch (error) {
+        addLocalMessage('[ERROR] Failed to access fragment database.');
+      }
+    } else if (cmd === '/drop' && users.length > 1) {
+      // Admin command to manually drop a fragment (only if multiple users online)
+      await dropRandomFragment();
+      addLocalMessage('[ADMIN] Signal fragment deployed to the matrix.');
+    } else if (cmd.startsWith('/pickup ')) {
+      const fragmentId = cmd.split(' ')[1];
+      if (fragmentId) {
+        await handleFragmentPickup(fragmentId);
+      } else {
+        addLocalMessage('[ERROR] Usage: /pickup <fragment_id>');
+      }
     } else {
       addLocalMessage('[ERROR] Unknown protocol. Type /help for available commands.');
     }
@@ -270,6 +331,61 @@ const ChatRoom: React.FC = () => {
       case 'leave': return 'text-red-400';
       default: return 'text-black';
     }
+  };
+
+  // Signal Fragment functions
+  const dropRandomFragment = async () => {
+    try {
+      const template = selectRandomFragment();
+      const fragmentId = generateFragmentId();
+      const expiresAt = new Date(Date.now() + 30000).toISOString(); // 30 seconds
+      
+      let content = template.content;
+      if (template.type === 'personalized') {
+        // Pick a random online user for personalization
+        const randomUser = users[Math.floor(Math.random() * users.length)];
+        if (randomUser) {
+          content = personalizeFragment(content, randomUser.username);
+        }
+      }
+
+      await chatAPI.dropFragment({
+        fragment_id: fragmentId,
+        content,
+        content_type: template.type,
+        rarity: template.rarity,
+        available: true,
+        expires_at: expiresAt
+      });
+    } catch (error) {
+      console.error('Failed to drop fragment:', error);
+    }
+  };
+
+  const handleFragmentPickup = async (fragmentId: string) => {
+    try {
+      const fragment = await chatAPI.pickupFragment(fragmentId, username);
+      setClaimedFragment(fragment);
+      setShowFragmentModal(true);
+      
+      // Remove from active fragments locally (will be updated by subscription too)
+      setActiveFragments(prev => prev.filter(f => f.fragment_id !== fragmentId));
+    } catch (error) {
+      console.error('Failed to pickup fragment:', error);
+      // Show error message in chat
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        username: 'System',
+        message: 'Fragment already claimed or expired.',
+        timestamp: new Date().toISOString(),
+        type: 'system'
+      };
+      setMessages(prev => [...prev, { ...errorMessage, timestamp: new Date(errorMessage.timestamp) }]);
+    }
+  };
+
+  const handleFragmentExpire = (fragmentId: string) => {
+    setActiveFragments(prev => prev.filter(f => f.fragment_id !== fragmentId));
   };
 
   if (!isJoined) {
@@ -379,7 +495,7 @@ const ChatRoom: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-transparent text-white p-4 relative">
+    <div className="min-h-screen bg-transparent text-white p-2 md:p-4 relative">
       {/* Background Scanlines */}
       <div 
         className="fixed inset-0 pointer-events-none" 
@@ -389,7 +505,7 @@ const ChatRoom: React.FC = () => {
         }}
       ></div>
       
-      <div className="max-w-7xl mx-auto relative z-10">
+      <div className="max-w-7xl mx-auto relative z-10 w-full">
         
         {/* Main Terminal Window */}
         <div className="bg-black/80 backdrop-blur-sm border border-green-400 shadow-2xl relative z-20" style={{ 
@@ -400,7 +516,7 @@ const ChatRoom: React.FC = () => {
           {/* Terminal Header */}
           <div className="bg-black border-b border-green-400 p-2 relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-green-400/10 to-transparent animate-pulse"></div>
-            <div className="flex justify-between items-center relative z-10">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center relative z-10 gap-2">
               <div className="flex items-center space-x-2">
                 <div className="flex space-x-1">
                   <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
@@ -412,8 +528,11 @@ const ChatRoom: React.FC = () => {
                 </span>
               </div>
               <div className="flex items-center space-x-3">
-                <span className="text-xs font-mono text-green-400">
+                <span className="text-xs font-mono text-green-400 hidden md:inline">
                   USERS_ONLINE: {users.length} | SIGNAL_STRENGTH: 98%
+                </span>
+                <span className="text-xs font-mono text-green-400 md:hidden">
+                  USERS: {users.length}
                 </span>
                 <motion.button
                   onClick={leaveChat}
@@ -434,10 +553,10 @@ const ChatRoom: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex h-[600px]">
+          <div className="flex flex-col md:flex-row h-[600px] md:h-[600px]">
             
             {/* Main Chat Terminal */}
-            <div className="flex-1 bg-black/50 border-r border-green-400 flex flex-col relative">
+            <div className="flex-1 bg-black/50 border-r-0 md:border-r border-green-400 flex flex-col relative">
               {/* Matrix Rain Effect */}
               <div className="absolute inset-0 pointer-events-none opacity-5">
                 <div className="text-green-400 text-xs font-mono animate-pulse">
@@ -498,6 +617,19 @@ const ChatRoom: React.FC = () => {
                     </motion.div>
                   ))}
                 </AnimatePresence>
+                
+                {/* Active Signal Fragments */}
+                {activeFragments.map((fragment) => (
+                  <SignalFragment
+                    key={fragment.fragment_id}
+                    fragmentId={fragment.fragment_id}
+                    rarity={fragment.rarity}
+                    isAvailable={fragment.available}
+                    onClick={() => handleFragmentPickup(fragment.fragment_id)}
+                    onExpire={() => handleFragmentExpire(fragment.fragment_id)}
+                  />
+                ))}
+                
                 <div ref={messagesEndRef} />
               </div>
 
@@ -544,7 +676,7 @@ const ChatRoom: React.FC = () => {
             </div>
 
             {/* Users Matrix Panel */}
-            <div className="w-64 bg-black border border-green-400" style={{ borderStyle: 'inset' }}>
+            <div className="w-full md:w-64 bg-black border-t md:border-t-0 border-l-0 md:border-l border-green-400 h-32 md:h-auto" style={{ borderStyle: 'inset' }}>
               <div className="bg-black border-b border-green-400 p-2 relative">
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-green-400/5 to-transparent"></div>
                 <h3 className="text-xs font-mono text-green-400 tracking-wider relative z-10">
@@ -552,13 +684,13 @@ const ChatRoom: React.FC = () => {
                 </h3>
               </div>
               
-              <div className="h-full overflow-y-auto p-2">
+              <div className="h-full overflow-y-auto p-2 flex md:block gap-2 overflow-x-auto md:overflow-x-visible">
                 {users.map((user) => (
                   <motion.div 
                     key={user.username} 
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="mb-2 flex items-center space-x-2 p-1 border border-transparent hover:border-green-400/30 transition-all"
+                    className="mb-0 md:mb-2 flex items-center space-x-2 p-1 border border-transparent hover:border-green-400/30 transition-all whitespace-nowrap md:whitespace-normal"
                   >
                     <div className={`w-1 h-1 rounded-full animate-pulse ${
                       user.status === 'online' ? 'bg-green-400' :
@@ -587,6 +719,13 @@ const ChatRoom: React.FC = () => {
           [STATUS] MATRIX_CONNECTION_STABLE | ENCRYPTION_LEVEL_5 | SIGNAL_SPIRITS_MONITORING
         </div>
       </div>
+      
+      {/* Fragment Modal */}
+      <FragmentModal
+        isOpen={showFragmentModal}
+        fragment={claimedFragment}
+        onClose={() => setShowFragmentModal(false)}
+      />
     </div>
   );
 };

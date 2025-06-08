@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import OpenAI from 'openai';
+import { chatAPI, type SignalFragment } from '../lib/supabase';
+import { selectRandomFragment, generateFragmentId, personalizeFragment, getRarityColor } from '../lib/fragmentContent';
 
 interface Zone {
   id: string;
@@ -34,9 +36,24 @@ interface Settings {
 }
 
 const AdminPanel: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'zones' | 'projects' | 'settings' | 'preview'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'zones' | 'projects' | 'database' | 'settings' | 'preview'>('dashboard');
   const [zones, setZones] = useState<Zone[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [fragments, setFragments] = useState<SignalFragment[]>([]);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatUsers, setChatUsers] = useState<any[]>([]);
+  const [fragmentStats, setFragmentStats] = useState({
+    total: 0,
+    active: 0,
+    claimed: 0,
+    expired: 0
+  });
+  const [dbStats, setDbStats] = useState({
+    messages: 0,
+    users: 0,
+    fragments: 0,
+    pickups: 0
+  });
   const [settings, setSettings] = useState<Settings>({
     titleFont: 'Space Mono',
     bodyFont: 'Space Mono', 
@@ -70,6 +87,7 @@ const AdminPanel: React.FC = () => {
   // Load existing data
   useEffect(() => {
     loadData();
+    loadAllDatabaseData();
     // Check if first visit
     const hasVisited = localStorage.getItem('scrollspace-admin-visited');
     if (!hasVisited) {
@@ -101,6 +119,195 @@ const AdminPanel: React.FC = () => {
       setProjects(mockProjects);
     } catch (error) {
       console.error('Failed to load data:', error);
+    }
+  };
+
+  const loadFragments = async () => {
+    try {
+      // Load all fragments for admin view
+      const { data: allFragments, error } = await chatAPI.supabase
+        .from('signal_fragments')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Failed to load fragments:', error);
+        return;
+      }
+
+      setFragments(allFragments || []);
+      
+      // Calculate stats
+      const now = new Date().toISOString();
+      const stats = {
+        total: allFragments?.length || 0,
+        active: allFragments?.filter(f => f.available && f.expires_at > now).length || 0,
+        claimed: allFragments?.filter(f => !f.available && f.claimed_by).length || 0,
+        expired: allFragments?.filter(f => f.available && f.expires_at <= now).length || 0
+      };
+      setFragmentStats(stats);
+    } catch (error) {
+      console.error('Failed to load fragments:', error);
+    }
+  };
+
+  const loadAllDatabaseData = async () => {
+    await Promise.all([
+      loadFragments(),
+      loadChatMessages(),
+      loadChatUsers(),
+      loadDatabaseStats()
+    ]);
+  };
+
+  const loadChatMessages = async () => {
+    try {
+      const { data: messages, error } = await chatAPI.supabase
+        .from('chat_messages')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) {
+        console.error('Failed to load chat messages:', error);
+        return;
+      }
+
+      setChatMessages(messages || []);
+    } catch (error) {
+      console.error('Failed to load chat messages:', error);
+    }
+  };
+
+  const loadChatUsers = async () => {
+    try {
+      const { data: users, error } = await chatAPI.supabase
+        .from('chat_users')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Failed to load chat users:', error);
+        return;
+      }
+
+      setChatUsers(users || []);
+    } catch (error) {
+      console.error('Failed to load chat users:', error);
+    }
+  };
+
+  const loadDatabaseStats = async () => {
+    try {
+      const [messagesCount, usersCount, fragmentsCount, pickupsCount] = await Promise.all([
+        chatAPI.supabase.from('chat_messages').select('*', { count: 'exact', head: true }),
+        chatAPI.supabase.from('chat_users').select('*', { count: 'exact', head: true }),
+        chatAPI.supabase.from('signal_fragments').select('*', { count: 'exact', head: true }),
+        chatAPI.supabase.from('fragment_pickups').select('*', { count: 'exact', head: true })
+      ]);
+
+      setDbStats({
+        messages: messagesCount.count || 0,
+        users: usersCount.count || 0,
+        fragments: fragmentsCount.count || 0,
+        pickups: pickupsCount.count || 0
+      });
+    } catch (error) {
+      console.error('Failed to load database stats:', error);
+    }
+  };
+
+  const clearChatHistory = async () => {
+    if (!confirm('⚠️ This will delete ALL chat messages. Are you sure?')) return;
+    
+    try {
+      const { error } = await chatAPI.supabase
+        .from('chat_messages')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      if (error) throw error;
+      
+      setChatMessages([]);
+      setSaveStatus('saved');
+    } catch (error) {
+      console.error('Failed to clear chat history:', error);
+    }
+  };
+
+  const clearAllUsers = async () => {
+    if (!confirm('⚠️ This will disconnect ALL users. Are you sure?')) return;
+    
+    try {
+      await chatAPI.clearAllUsers();
+      setChatUsers([]);
+      setSaveStatus('saved');
+    } catch (error) {
+      console.error('Failed to clear users:', error);
+    }
+  };
+
+  const exportDatabaseData = async () => {
+    try {
+      const [messages, users, fragments, pickups] = await Promise.all([
+        chatAPI.supabase.from('chat_messages').select('*'),
+        chatAPI.supabase.from('chat_users').select('*'),
+        chatAPI.supabase.from('signal_fragments').select('*'),
+        chatAPI.supabase.from('fragment_pickups').select('*')
+      ]);
+
+      const exportData = {
+        exported_at: new Date().toISOString(),
+        scrollspace_data: {
+          chat_messages: messages.data || [],
+          chat_users: users.data || [],
+          signal_fragments: fragments.data || [],
+          fragment_pickups: pickups.data || []
+        }
+      };
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `scrollspace-export-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export data:', error);
+    }
+  };
+
+  const dropFragment = async () => {
+    try {
+      const template = selectRandomFragment();
+      const fragmentId = generateFragmentId();
+      const expiresAt = new Date(Date.now() + 30000).toISOString(); // 30 seconds
+
+      await chatAPI.dropFragment({
+        fragment_id: fragmentId,
+        content: template.content,
+        content_type: template.type,
+        rarity: template.rarity,
+        available: true,
+        expires_at: expiresAt
+      });
+
+      // Reload fragments
+      loadFragments();
+      setSaveStatus('saved');
+    } catch (error) {
+      console.error('Failed to drop fragment:', error);
+    }
+  };
+
+  const clearExpiredFragments = async () => {
+    try {
+      await chatAPI.cleanupExpiredFragments();
+      loadFragments();
+      setSaveStatus('saved');
+    } catch (error) {
+      console.error('Failed to clear expired fragments:', error);
     }
   };
 
@@ -677,6 +884,96 @@ Respond in JSON format:
           </div>
         );
         break;
+      case 'database':
+        content = (
+          <div>
+            <h3 className="text-xl font-mono text-cyan-400 mb-4">Database Overview</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-gray-700 rounded-lg p-3 text-center">
+                <div className="text-xl font-mono font-bold text-cyan-400">{dbStats.messages}</div>
+                <div className="text-xs font-mono text-gray-400">Messages</div>
+              </div>
+              <div className="bg-gray-700 rounded-lg p-3 text-center">
+                <div className="text-xl font-mono font-bold text-green-400">{dbStats.users}</div>
+                <div className="text-xs font-mono text-gray-400">Users</div>
+              </div>
+              <div className="bg-gray-700 rounded-lg p-3 text-center">
+                <div className="text-xl font-mono font-bold text-purple-400">{dbStats.fragments}</div>
+                <div className="text-xs font-mono text-gray-400">Fragments</div>
+              </div>
+              <div className="bg-gray-700 rounded-lg p-3 text-center">
+                <div className="text-xl font-mono font-bold text-yellow-400">{dbStats.pickups}</div>
+                <div className="text-xs font-mono text-gray-400">Pickups</div>
+              </div>
+            </div>
+            <div className="flex space-x-2 mb-4">
+              <button 
+                onClick={() => {setActiveTab('database'); setShowInfoPanel(null);}}
+                className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded font-mono"
+              >
+                🗄️ Full Database
+              </button>
+              <button 
+                onClick={exportDatabaseData}
+                className="bg-green-600 hover:bg-green-500 text-black px-4 py-2 rounded font-mono"
+              >
+                📥 Export Data
+              </button>
+              <button 
+                onClick={loadAllDatabaseData}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-mono"
+              >
+                🔄 Refresh
+              </button>
+            </div>
+          </div>
+        );
+        break;
+      case 'fragments':
+        content = (
+          <div>
+            <h3 className="text-xl font-mono text-cyan-400 mb-4">Signal Fragments ({fragmentStats.total})</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-gray-700 rounded-lg p-3 text-center">
+                <div className="text-xl font-mono font-bold text-green-400">{fragmentStats.active}</div>
+                <div className="text-xs font-mono text-gray-400">Active</div>
+              </div>
+              <div className="bg-gray-700 rounded-lg p-3 text-center">
+                <div className="text-xl font-mono font-bold text-blue-400">{fragmentStats.claimed}</div>
+                <div className="text-xs font-mono text-gray-400">Claimed</div>
+              </div>
+              <div className="bg-gray-700 rounded-lg p-3 text-center">
+                <div className="text-xl font-mono font-bold text-red-400">{fragmentStats.expired}</div>
+                <div className="text-xs font-mono text-gray-400">Expired</div>
+              </div>
+              <div className="bg-gray-700 rounded-lg p-3 text-center">
+                <div className="text-xl font-mono font-bold text-cyan-400">{fragmentStats.total}</div>
+                <div className="text-xs font-mono text-gray-400">Total</div>
+              </div>
+            </div>
+            <div className="flex space-x-2 mb-4">
+              <button 
+                onClick={dropFragment}
+                className="bg-green-600 hover:bg-green-500 text-black px-4 py-2 rounded font-mono"
+              >
+                🎲 Drop Random Fragment
+              </button>
+              <button 
+                onClick={clearExpiredFragments}
+                className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded font-mono"
+              >
+                🗑️ Clear Expired
+              </button>
+              <button 
+                onClick={() => {setActiveTab('fragments'); setShowInfoPanel(null);}}
+                className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded font-mono"
+              >
+                📊 Manage Fragments
+              </button>
+            </div>
+          </div>
+        );
+        break;
       default:
         content = <div>No information available</div>;
     }
@@ -788,7 +1085,7 @@ Respond in JSON format:
 
         {/* Navigation Tabs */}
         <div className="flex space-x-1 mb-8">
-          {(['dashboard', 'zones', 'projects', 'settings', 'preview'] as const).map((tab) => (
+          {(['dashboard', 'zones', 'projects', 'database', 'settings', 'preview'] as const).map((tab) => (
             <motion.button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -803,6 +1100,7 @@ Respond in JSON format:
               {tab === 'dashboard' && '📊 '}
               {tab === 'zones' && '🎪 '}
               {tab === 'projects' && '🎠 '}
+              {tab === 'database' && '🗄️ '}
               {tab === 'settings' && '⚙️ '}
               {tab === 'preview' && '👁️ '}
               {tab.toUpperCase()}
@@ -856,6 +1154,24 @@ Respond in JSON format:
                 >
                   <div className="text-3xl font-mono font-bold text-purple-400">{settings.spiritCount}</div>
                   <div className="text-gray-400 font-mono text-sm">Signal Spirits</div>
+                </motion.div>
+
+                <motion.div 
+                  className="bg-gray-800 rounded-lg p-4 border border-cyan-400/30 cursor-pointer"
+                  whileHover={{ scale: 1.02 }}
+                  onClick={() => setShowInfoPanel('database')}
+                >
+                  <div className="text-3xl font-mono font-bold text-cyan-400">{dbStats.messages}</div>
+                  <div className="text-gray-400 font-mono text-sm">Chat Messages</div>
+                </motion.div>
+
+                <motion.div 
+                  className="bg-gray-800 rounded-lg p-4 border border-green-400/30 cursor-pointer"
+                  whileHover={{ scale: 1.02 }}
+                  onClick={() => setActiveTab('database')}
+                >
+                  <div className="text-3xl font-mono font-bold text-green-400">{dbStats.users}</div>
+                  <div className="text-gray-400 font-mono text-sm">Total Users</div>
                 </motion.div>
               </div>
 
@@ -1158,6 +1474,205 @@ Respond in JSON format:
                     </div>
                   </motion.div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Database Tab */}
+          {activeTab === 'database' && (
+            <div>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-mono text-cyan-400">Database Management</h2>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={exportDatabaseData}
+                    className="bg-green-600 hover:bg-green-500 text-black font-mono font-bold px-4 py-2 rounded transition-colors"
+                  >
+                    📥 EXPORT
+                  </button>
+                  <button
+                    onClick={loadAllDatabaseData}
+                    className="bg-blue-600 hover:bg-blue-500 text-white font-mono font-bold px-4 py-2 rounded transition-colors"
+                  >
+                    🔄 REFRESH
+                  </button>
+                </div>
+              </div>
+
+              {/* Database Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-gray-800 rounded-lg p-4 text-center border border-cyan-400/30">
+                  <div className="text-2xl font-mono font-bold text-cyan-400">{dbStats.messages}</div>
+                  <div className="text-sm font-mono text-gray-400">CHAT MESSAGES</div>
+                </div>
+                <div className="bg-gray-800 rounded-lg p-4 text-center border border-green-400/30">
+                  <div className="text-2xl font-mono font-bold text-green-400">{dbStats.users}</div>
+                  <div className="text-sm font-mono text-gray-400">TOTAL USERS</div>
+                </div>
+                <div className="bg-gray-800 rounded-lg p-4 text-center border border-purple-400/30">
+                  <div className="text-2xl font-mono font-bold text-purple-400">{dbStats.fragments}</div>
+                  <div className="text-sm font-mono text-gray-400">FRAGMENTS</div>
+                </div>
+                <div className="bg-gray-800 rounded-lg p-4 text-center border border-yellow-400/30">
+                  <div className="text-2xl font-mono font-bold text-yellow-400">{dbStats.pickups}</div>
+                  <div className="text-sm font-mono text-gray-400">PICKUPS</div>
+                </div>
+              </div>
+
+              {/* Database Management Sections */}
+              <div className="grid md:grid-cols-2 gap-6">
+                
+                {/* Chat Messages */}
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-mono text-cyan-400">Chat Messages ({chatMessages.length})</h3>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={dropFragment}
+                        className="bg-green-600 hover:bg-green-500 text-black px-2 py-1 rounded font-mono text-xs"
+                      >
+                        🎲 Drop Fragment
+                      </button>
+                      <button
+                        onClick={clearChatHistory}
+                        className="bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded font-mono text-xs"
+                      >
+                        🗑️ Clear All
+                      </button>
+                    </div>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto space-y-2">
+                    {chatMessages.slice(0, 10).map((msg) => (
+                      <div key={msg.id} className="bg-gray-700 rounded p-2 text-xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-mono text-cyan-400">{msg.username}</span>
+                          <span className={`px-1 rounded font-mono ${
+                            msg.type === 'system' ? 'text-purple-400' :
+                            msg.type === 'join' ? 'text-green-400' :
+                            msg.type === 'leave' ? 'text-red-400' : 'text-gray-400'
+                          }`}>
+                            {msg.type.toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="text-gray-300 font-mono">
+                          {msg.message.length > 80 ? msg.message.substring(0, 80) + '...' : msg.message}
+                        </div>
+                        <div className="text-gray-500 font-mono text-xs mt-1">
+                          {new Date(msg.created_at).toLocaleString()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Signal Fragments */}
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-mono text-purple-400">Signal Fragments ({fragments.length})</h3>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={clearExpiredFragments}
+                        className="bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded font-mono text-xs"
+                      >
+                        🗑️ Cleanup
+                      </button>
+                    </div>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto space-y-2">
+                    {fragments.slice(0, 10).map((fragment) => (
+                      <div key={fragment.id} className={`bg-gray-700 rounded p-2 text-xs border-l-2 ${
+                        fragment.available ? 'border-green-400' : 'border-blue-400'
+                      }`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-mono text-cyan-400">#{fragment.fragment_id}</span>
+                          <div className="flex space-x-1">
+                            <span className={`px-1 rounded font-mono ${getRarityColor(fragment.rarity)} text-xs`}>
+                              {fragment.rarity.charAt(0).toUpperCase()}
+                            </span>
+                            <span className={`px-1 rounded font-mono text-xs ${
+                              fragment.available ? 'text-green-400' : 'text-blue-400'
+                            }`}>
+                              {fragment.available ? 'ACTIVE' : 'CLAIMED'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-gray-300 font-mono">
+                          {fragment.content.length > 60 ? fragment.content.substring(0, 60) + '...' : fragment.content}
+                        </div>
+                        {fragment.claimed_by && (
+                          <div className="text-gray-500 font-mono text-xs mt-1">
+                            Claimed by: {fragment.claimed_by}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Chat Users */}
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-mono text-green-400">Chat Users ({chatUsers.length})</h3>
+                    <button
+                      onClick={clearAllUsers}
+                      className="bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded font-mono text-xs"
+                    >
+                      🗑️ Clear All
+                    </button>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto space-y-2">
+                    {chatUsers.map((user) => (
+                      <div key={user.id} className="bg-gray-700 rounded p-2 text-xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-mono text-green-400">{user.username}</span>
+                          <span className={`px-1 rounded font-mono ${
+                            user.status === 'online' ? 'text-green-400' :
+                            user.status === 'away' ? 'text-yellow-400' : 'text-gray-400'
+                          }`}>
+                            {user.status.toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="text-gray-500 font-mono text-xs">
+                          Last seen: {new Date(user.last_seen).toLocaleString()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Database Actions */}
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h3 className="text-lg font-mono text-yellow-400 mb-4">Database Actions</h3>
+                  <div className="space-y-3">
+                    <button
+                      onClick={exportDatabaseData}
+                      className="w-full bg-green-600 hover:bg-green-500 text-black py-2 px-4 rounded font-mono transition-colors"
+                    >
+                      📥 Export All Data (JSON)
+                    </button>
+                    <button
+                      onClick={loadAllDatabaseData}
+                      className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 px-4 rounded font-mono transition-colors"
+                    >
+                      🔄 Refresh All Data
+                    </button>
+                    <div className="border-t border-gray-600 pt-3">
+                      <p className="text-gray-400 font-mono text-xs mb-2">Danger Zone:</p>
+                      <button
+                        onClick={clearChatHistory}
+                        className="w-full bg-red-600 hover:bg-red-500 text-white py-2 px-4 rounded font-mono transition-colors mb-2"
+                      >
+                        🗑️ Clear Chat History
+                      </button>
+                      <button
+                        onClick={clearAllUsers}
+                        className="w-full bg-red-600 hover:bg-red-500 text-white py-2 px-4 rounded font-mono transition-colors"
+                      >
+                        👥 Disconnect All Users
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}

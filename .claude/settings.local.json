@@ -24,7 +24,9 @@
       "Bash(ls:*)",
       "Bash(cp:*)",
       "Bash(touch:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "WebFetch(domain:scrollspace.dev)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

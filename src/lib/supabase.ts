@@ -25,6 +25,26 @@ export interface ChatUser {
   created_at?: string;
 }
 
+export interface SignalFragment {
+  id: string;
+  fragment_id: string;
+  content: string;
+  content_type: 'lore' | 'puzzle' | 'flavor' | 'personalized';
+  rarity: 'common' | 'rare' | 'encrypted' | 'corrupted';
+  available: boolean;
+  claimed_by?: string;
+  claimed_at?: string;
+  expires_at: string;
+  created_at?: string;
+}
+
+export interface FragmentPickup {
+  id: string;
+  fragment_id: string;
+  username: string;
+  picked_up_at: string;
+}
+
 // Chat API functions
 export const chatAPI = {
   // Send a message
@@ -248,6 +268,140 @@ export const chatAPI = {
     if (error) {
       console.error('Error clearing all users:', error);
     }
+  },
+
+  // Signal Fragment functions
+  async dropFragment(fragmentData: Omit<SignalFragment, 'id' | 'created_at'>) {
+    const { data, error } = await supabase
+      .from('signal_fragments')
+      .insert([fragmentData])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error dropping fragment:', error);
+      throw error;
+    }
+
+    // Broadcast fragment drop to all users
+    await this.sendMessage('System', `[SIGNAL_FRAGMENT_DETECTED: ${fragmentData.fragment_id}] Click to /pickup`, 'system');
+    
+    return data;
+  },
+
+  async getActiveFragments() {
+    const now = new Date().toISOString();
+    
+    const { data, error } = await supabase
+      .from('signal_fragments')
+      .select('*')
+      .eq('available', true)
+      .gt('expires_at', now)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching fragments:', error);
+      return [];
+    }
+
+    return data || [];
+  },
+
+  async pickupFragment(fragmentId: string, username: string) {
+    // Check if fragment is still available
+    const { data: fragment, error: fetchError } = await supabase
+      .from('signal_fragments')
+      .select('*')
+      .eq('fragment_id', fragmentId)
+      .eq('available', true)
+      .gt('expires_at', new Date().toISOString())
+      .single();
+
+    if (fetchError || !fragment) {
+      throw new Error('Fragment not available or already claimed');
+    }
+
+    // Claim the fragment
+    const { data: updatedFragment, error: updateError } = await supabase
+      .from('signal_fragments')
+      .update({
+        available: false,
+        claimed_by: username,
+        claimed_at: new Date().toISOString()
+      })
+      .eq('fragment_id', fragmentId)
+      .eq('available', true) // Double-check it's still available
+      .select()
+      .single();
+
+    if (updateError || !updatedFragment) {
+      throw new Error('Failed to claim fragment - may have been claimed by another user');
+    }
+
+    // Log the pickup
+    await supabase
+      .from('fragment_pickups')
+      .insert([{
+        fragment_id: fragmentId,
+        username,
+        picked_up_at: new Date().toISOString()
+      }]);
+
+    // Send pickup notification
+    await this.sendMessage('System', `${username} picked up fragment ${fragmentId}`, 'system');
+
+    return updatedFragment;
+  },
+
+  async getUserFragments(username: string) {
+    const { data, error } = await supabase
+      .from('signal_fragments')
+      .select('*')
+      .eq('claimed_by', username)
+      .order('claimed_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching user fragments:', error);
+      return [];
+    }
+
+    return data || [];
+  },
+
+  async cleanupExpiredFragments() {
+    const now = new Date().toISOString();
+    
+    const { error } = await supabase
+      .from('signal_fragments')
+      .delete()
+      .lt('expires_at', now)
+      .eq('available', true);
+
+    if (error) {
+      console.error('Error cleaning up expired fragments:', error);
+    }
+  },
+
+  // Subscribe to fragment events
+  subscribeToFragments(callback: (fragments: SignalFragment[]) => void) {
+    const subscription = supabase
+      .channel('signal-fragments')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'signal_fragments'
+        },
+        async () => {
+          // Refresh fragments list when there's any change
+          const fragments = await this.getActiveFragments();
+          callback(fragments);
+        }
+      )
+      .subscribe();
+
+    return subscription;
   }
 };
 
@@ -272,9 +426,33 @@ CREATE TABLE IF NOT EXISTS chat_users (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Create signal_fragments table
+CREATE TABLE IF NOT EXISTS signal_fragments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  fragment_id TEXT UNIQUE NOT NULL,
+  content TEXT NOT NULL,
+  content_type TEXT DEFAULT 'lore' CHECK (content_type IN ('lore', 'puzzle', 'flavor', 'personalized')),
+  rarity TEXT DEFAULT 'common' CHECK (rarity IN ('common', 'rare', 'encrypted', 'corrupted')),
+  available BOOLEAN DEFAULT true,
+  claimed_by TEXT,
+  claimed_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create fragment_pickups table for logging
+CREATE TABLE IF NOT EXISTS fragment_pickups (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  fragment_id TEXT NOT NULL,
+  username TEXT NOT NULL,
+  picked_up_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Enable Row Level Security
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE signal_fragments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fragment_pickups ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for public access (adjust as needed for your security requirements)
 CREATE POLICY "Anyone can read messages" ON chat_messages FOR SELECT USING (true);
@@ -285,12 +463,26 @@ CREATE POLICY "Anyone can insert users" ON chat_users FOR INSERT WITH CHECK (tru
 CREATE POLICY "Anyone can update users" ON chat_users FOR UPDATE USING (true);
 CREATE POLICY "Anyone can delete users" ON chat_users FOR DELETE USING (true);
 
+CREATE POLICY "Anyone can read fragments" ON signal_fragments FOR SELECT USING (true);
+CREATE POLICY "Anyone can insert fragments" ON signal_fragments FOR INSERT WITH CHECK (true);
+CREATE POLICY "Anyone can update fragments" ON signal_fragments FOR UPDATE USING (true);
+CREATE POLICY "Anyone can delete fragments" ON signal_fragments FOR DELETE USING (true);
+
+CREATE POLICY "Anyone can read pickups" ON fragment_pickups FOR SELECT USING (true);
+CREATE POLICY "Anyone can insert pickups" ON fragment_pickups FOR INSERT WITH CHECK (true);
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at);
 CREATE INDEX IF NOT EXISTS idx_chat_users_username ON chat_users(username);
 CREATE INDEX IF NOT EXISTS idx_chat_users_status ON chat_users(status);
+CREATE INDEX IF NOT EXISTS idx_signal_fragments_fragment_id ON signal_fragments(fragment_id);
+CREATE INDEX IF NOT EXISTS idx_signal_fragments_available ON signal_fragments(available);
+CREATE INDEX IF NOT EXISTS idx_signal_fragments_expires_at ON signal_fragments(expires_at);
+CREATE INDEX IF NOT EXISTS idx_fragment_pickups_username ON fragment_pickups(username);
 
--- Enable realtime for both tables
+-- Enable realtime for all tables
 ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
 ALTER PUBLICATION supabase_realtime ADD TABLE chat_users;
+ALTER PUBLICATION supabase_realtime ADD TABLE signal_fragments;
+ALTER PUBLICATION supabase_realtime ADD TABLE fragment_pickups;
 `;

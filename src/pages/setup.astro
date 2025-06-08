@@ -1,0 +1,154 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="ScrollSpace Setup" description="Database setup for Signal Fragments">
+  <div class="min-h-screen bg-black text-white p-6 flex items-center justify-center">
+    <div class="max-w-4xl mx-auto">
+      <div class="text-center mb-8">
+        <h1 class="text-4xl font-bold text-green-400 mb-4 font-mono">
+          SCROLLSPACE_DATABASE_SETUP
+        </h1>
+        <p class="text-gray-300 font-mono">
+          Initialize Signal Fragments system in your Supabase project
+        </p>
+      </div>
+
+      <div class="bg-black/80 border border-green-400 p-6 font-mono">
+        <h2 class="text-xl text-green-400 mb-4">Setup Instructions:</h2>
+        
+        <div class="space-y-4 text-sm">
+          <div class="border-l-2 border-green-400 pl-4">
+            <p class="text-green-300 font-bold">1. Open your Supabase Dashboard</p>
+            <p class="text-gray-300">Go to https://supabase.com/dashboard</p>
+          </div>
+          
+          <div class="border-l-2 border-green-400 pl-4">
+            <p class="text-green-300 font-bold">2. Navigate to SQL Editor</p>
+            <p class="text-gray-300">Click "SQL Editor" in the left sidebar</p>
+          </div>
+          
+          <div class="border-l-2 border-green-400 pl-4">
+            <p class="text-green-300 font-bold">3. Copy and Run This SQL:</p>
+            <div class="bg-black border border-gray-600 p-4 mt-2 overflow-x-auto">
+              <pre class="text-xs text-gray-300"><code>-- Signal Fragments Tables
+CREATE TABLE IF NOT EXISTS signal_fragments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  fragment_id TEXT UNIQUE NOT NULL,
+  content TEXT NOT NULL,
+  content_type TEXT DEFAULT 'lore' CHECK (content_type IN ('lore', 'puzzle', 'flavor', 'personalized')),
+  rarity TEXT DEFAULT 'common' CHECK (rarity IN ('common', 'rare', 'encrypted', 'corrupted')),
+  available BOOLEAN DEFAULT true,
+  claimed_by TEXT,
+  claimed_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS fragment_pickups (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  fragment_id TEXT NOT NULL,
+  username TEXT NOT NULL,
+  picked_up_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable Row Level Security
+ALTER TABLE signal_fragments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fragment_pickups ENABLE ROW LEVEL SECURITY;
+
+-- Create Policies
+CREATE POLICY "Anyone can read fragments" ON signal_fragments FOR SELECT USING (true);
+CREATE POLICY "Anyone can insert fragments" ON signal_fragments FOR INSERT WITH CHECK (true);
+CREATE POLICY "Anyone can update fragments" ON signal_fragments FOR UPDATE USING (true);
+CREATE POLICY "Anyone can delete fragments" ON signal_fragments FOR DELETE USING (true);
+
+CREATE POLICY "Anyone can read pickups" ON fragment_pickups FOR SELECT USING (true);
+CREATE POLICY "Anyone can insert pickups" ON fragment_pickups FOR INSERT WITH CHECK (true);
+
+-- Create Indexes
+CREATE INDEX IF NOT EXISTS idx_signal_fragments_fragment_id ON signal_fragments(fragment_id);
+CREATE INDEX IF NOT EXISTS idx_signal_fragments_available ON signal_fragments(available);
+CREATE INDEX IF NOT EXISTS idx_signal_fragments_expires_at ON signal_fragments(expires_at);
+CREATE INDEX IF NOT EXISTS idx_fragment_pickups_username ON fragment_pickups(username);
+
+-- Enable Realtime
+ALTER PUBLICATION supabase_realtime ADD TABLE signal_fragments;
+ALTER PUBLICATION supabase_realtime ADD TABLE fragment_pickups;</code></pre>
+            </div>
+            <button 
+              onclick="copyToClipboard()" 
+              class="mt-2 bg-green-900 hover:bg-green-800 border border-green-400 text-green-400 px-4 py-2 text-xs transition-all"
+            >
+              📋 COPY_SQL
+            </button>
+          </div>
+
+          <div class="border-l-2 border-green-400 pl-4">
+            <p class="text-green-300 font-bold">4. Enable Realtime</p>
+            <p class="text-gray-300">Go to Database → Replication</p>
+            <p class="text-gray-300">Enable realtime for: signal_fragments, fragment_pickups</p>
+          </div>
+
+          <div class="border-l-2 border-green-400 pl-4">
+            <p class="text-green-300 font-bold">5. Test Connection</p>
+            <button 
+              onclick="testConnection()" 
+              class="bg-blue-900 hover:bg-blue-800 border border-blue-400 text-blue-400 px-4 py-2 text-xs transition-all"
+            >
+              🔍 TEST_FRAGMENTS_SYSTEM
+            </button>
+            <div id="test-result" class="mt-2 text-xs"></div>
+          </div>
+        </div>
+
+        <div class="mt-6 pt-4 border-t border-green-400">
+          <p class="text-green-400 text-sm">
+            ✅ Once setup is complete, Signal Fragments will automatically appear in chat!
+          </p>
+          <a 
+            href="/chat" 
+            class="inline-block mt-2 bg-green-900 hover:bg-green-800 border border-green-400 text-green-400 px-6 py-2 text-sm transition-all"
+          >
+            🚀 RETURN_TO_CHAT
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function copyToClipboard() {
+      const sqlCode = document.querySelector('pre code').textContent;
+      navigator.clipboard.writeText(sqlCode).then(() => {
+        const btn = document.querySelector('button');
+        const originalText = btn.textContent;
+        btn.textContent = '✅ COPIED!';
+        btn.style.backgroundColor = '#166534';
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.backgroundColor = '';
+        }, 2000);
+      });
+    }
+
+    async function testConnection() {
+      const resultDiv = document.getElementById('test-result');
+      resultDiv.textContent = '⏳ Testing connection...';
+      resultDiv.className = 'mt-2 text-xs text-yellow-400';
+
+      try {
+        const response = await fetch('/api/test-fragments');
+        if (response.ok) {
+          resultDiv.textContent = '✅ Signal Fragments system online!';
+          resultDiv.className = 'mt-2 text-xs text-green-400';
+        } else {
+          resultDiv.textContent = '❌ Tables not found. Please run the SQL above.';
+          resultDiv.className = 'mt-2 text-xs text-red-400';
+        }
+      } catch (error) {
+        resultDiv.textContent = '❌ Connection failed. Check your environment variables.';
+        resultDiv.className = 'mt-2 text-xs text-red-400';
+      }
+    }
+  </script>
+</Layout>
