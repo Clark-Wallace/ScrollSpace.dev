@@ -214,7 +214,8 @@ const AuthenticatedChatRoom: React.FC = () => {
   };
 
   const sendMessage = async () => {
-    if (!currentMessage.trim() || !profile) return;
+    const currentUser = profile || bypassSession;
+    if (!currentMessage.trim() || !currentUser) return;
 
     // Handle commands locally
     if (currentMessage.startsWith('/')) {
@@ -227,7 +228,7 @@ const AuthenticatedChatRoom: React.FC = () => {
     setCurrentMessage('');
 
     try {
-      await chatAPI.sendMessage(profile.username, messageText);
+      await chatAPI.sendMessage(currentUser.username, messageText);
     } catch (error) {
       console.error('Failed to send message:', error);
       // Re-add the message to the input if it failed
@@ -237,7 +238,8 @@ const AuthenticatedChatRoom: React.FC = () => {
   };
 
   const handleCommand = async (command: string) => {
-    if (!profile) return;
+    const currentUser = profile || bypassSession;
+    if (!currentUser) return;
     
     const cmd = command.toLowerCase();
     
@@ -258,7 +260,10 @@ const AuthenticatedChatRoom: React.FC = () => {
       const userList = users.map(u => `${u.username} (${u.status})`).join(', ');
       addLocalMessage(`[NET] Active nodes: ${userList}`);
     } else if (cmd === '/profile') {
-      addLocalMessage(`[PROFILE] Neural ID: ${profile.username} | Fragments: ${profile.total_fragments} | Rare: ${profile.rare_fragments} | Status: ${profile.is_online ? 'ONLINE' : 'OFFLINE'}`);
+      const fragments = profile?.total_fragments || 0;
+      const rareFragments = profile?.rare_fragments || 0;
+      const status = profile?.is_online ? 'ONLINE' : (bypassSession ? 'BYPASS' : 'OFFLINE');
+      addLocalMessage(`[PROFILE] Neural ID: ${currentUser.username} | Fragments: ${fragments} | Rare: ${rareFragments} | Status: ${status}`);
     } else if (cmd === '/time') {
       addLocalMessage(`[CLOCK] Matrix time: ${new Date().toLocaleString()}`);
     } else if (cmd === '/clear') {
@@ -266,14 +271,14 @@ const AuthenticatedChatRoom: React.FC = () => {
       addLocalMessage('[SYS] Terminal buffer cleared');
     } else if (cmd === '/away') {
       try {
-        await chatAPI.updateUserStatus(profile.username, 'away');
+        await chatAPI.updateUserStatus(currentUser.username, 'away');
         addLocalMessage('[STATUS] Stealth mode: ACTIVE');
       } catch (error) {
         addLocalMessage('[ERROR] Status update failed');
       }
     } else if (cmd === '/back') {
       try {
-        await chatAPI.updateUserStatus(profile.username, 'online');
+        await chatAPI.updateUserStatus(currentUser.username, 'online');
         addLocalMessage('[STATUS] Neural link: RESTORED');
       } catch (error) {
         addLocalMessage('[ERROR] Status update failed');
@@ -289,7 +294,7 @@ const AuthenticatedChatRoom: React.FC = () => {
       addLocalMessage('[SYSTEM] Welcome to the ScrollSpace Matrix, choom. Reality is just another ICE to break.');
     } else if (cmd === '/fragments') {
       try {
-        const userFragments = await chatAPI.getUserFragments(profile.username);
+        const userFragments = await chatAPI.getUserFragments(currentUser.username);
         if (userFragments.length === 0) {
           addLocalMessage('[FRAGMENT] No data shards in your collection.');
         } else {
@@ -319,7 +324,8 @@ const AuthenticatedChatRoom: React.FC = () => {
 
   // Signal Fragment functions
   const dropRandomFragment = async () => {
-    if (!profile) return;
+    const currentUser = profile || bypassSession;
+    if (!currentUser) return;
     
     try {
       const template = selectRandomFragment();
@@ -328,7 +334,7 @@ const AuthenticatedChatRoom: React.FC = () => {
       
       let content = template.content;
       if (template.type === 'personalized') {
-        content = personalizeFragment(content, profile.username);
+        content = personalizeFragment(content, currentUser.username);
       }
 
       await chatAPI.dropFragment({
@@ -355,20 +361,23 @@ const AuthenticatedChatRoom: React.FC = () => {
   };
 
   const handleFragmentPickup = async (fragmentId: string) => {
-    if (!profile || !user) return;
+    const currentUser = profile || bypassSession;
+    if (!currentUser) return;
     
     try {
-      const fragment = await chatAPI.pickupFragment(fragmentId, profile.username);
+      const fragment = await chatAPI.pickupFragment(fragmentId, currentUser.username);
       setClaimedFragment(fragment);
       setShowFragmentModal(true);
       
-      // Update user's fragment count
-      await authAPI.updateUserProfile(user.id, {
-        total_fragments: profile.total_fragments + 1,
-        rare_fragments: ['rare', 'encrypted', 'corrupted'].includes(fragment.rarity) 
-          ? profile.rare_fragments + 1 
-          : profile.rare_fragments
-      });
+      // Update user's fragment count (only for authenticated users)
+      if (user && profile) {
+        await authAPI.updateUserProfile(user.id, {
+          total_fragments: profile.total_fragments + 1,
+          rare_fragments: ['rare', 'encrypted', 'corrupted'].includes(fragment.rarity) 
+            ? profile.rare_fragments + 1 
+            : profile.rare_fragments
+        });
+      }
       
       // Remove from active fragments locally
       setActiveFragments(prev => prev.filter(f => f.fragment_id !== fragmentId));
@@ -525,10 +534,10 @@ const AuthenticatedChatRoom: React.FC = () => {
                   &gt;&gt;&gt; NEURAL_LINK_ESTABLISHED_TO: "SCROLLSPACE_MATRIX" &lt;&lt;&lt;
                 </div>
                 <div className="mb-2 text-green-400 text-xs">
-                  [SYSTEM] Welcome {profile.display_name || profile.username}, choom. Neural signature verified.
+                  [SYSTEM] Welcome {profile?.display_name || (profile || bypassSession)?.username}, choom. Neural signature {profile ? 'verified' : 'bypassed'}.
                 </div>
                 <div className="mb-2 text-cyan-400 text-xs">
-                  [ICE] Authentication: VERIFIED | Fragment collection: {profile.total_fragments} shards
+                  [ICE] Authentication: {profile ? 'VERIFIED' : 'BYPASS'} | Fragment collection: {profile?.total_fragments || 0} shards
                 </div>
                 
                 <AnimatePresence>
@@ -542,7 +551,7 @@ const AuthenticatedChatRoom: React.FC = () => {
                       {msg.type === 'message' && (
                         <div className="flex">
                           <span className="text-cyan-400 text-xs mr-1">[{formatTime(msg.timestamp)}]</span>
-                          <span className={msg.username === profile.username ? 'text-yellow-400 font-bold' : 'text-cyan-400 font-bold'}>
+                          <span className={msg.username === (profile || bypassSession)?.username ? 'text-yellow-400 font-bold' : 'text-cyan-400 font-bold'}>
                             {msg.username}@net:
                           </span>
                           <span className="text-green-300 ml-1">{msg.message}</span>
@@ -646,10 +655,10 @@ const AuthenticatedChatRoom: React.FC = () => {
                       user.status === 'away' ? 'bg-yellow-400' : 'bg-red-400'
                     }`}></div>
                     <span className={`text-xs font-mono ${
-                      user.username === profile.username ? 'text-yellow-400 font-bold' : 'text-cyan-400'
+                      user.username === (profile || bypassSession)?.username ? 'text-yellow-400 font-bold' : 'text-cyan-400'
                     }`}>
                       {user.username}
-                      {user.username === profile.username && '@local'}
+                      {user.username === (profile || bypassSession)?.username && '@local'}
                     </span>
                   </motion.div>
                 ))}
@@ -665,7 +674,7 @@ const AuthenticatedChatRoom: React.FC = () => {
         
         {/* Status Terminal */}
         <div className="mt-2 text-xs text-green-400 font-mono text-center opacity-80">
-          [STATUS] NEURAL_LINK_VERIFIED | IDENTITY: {profile.username} | FRAGMENTS: {profile.total_fragments}
+          [STATUS] NEURAL_LINK_{profile ? 'VERIFIED' : 'BYPASSED'} | IDENTITY: {(profile || bypassSession)?.username} | FRAGMENTS: {profile?.total_fragments || 0}
         </div>
       </div>
       
