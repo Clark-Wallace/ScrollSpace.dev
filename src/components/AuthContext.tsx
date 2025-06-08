@@ -88,6 +88,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             console.log('Profile created:', userProfile);
           } catch (error) {
             console.error('Error creating user profile:', error);
+            // If profile creation fails, create a minimal fallback
+            console.log('Creating fallback profile in state only');
+            userProfile = {
+              user_id: session.user.id,
+              username: username,
+              display_name: displayName || username,
+              total_fragments: 0,
+              rare_fragments: 0,
+              is_online: true,
+              joined_at: new Date().toISOString(),
+              last_seen: new Date().toISOString()
+            } as UserProfile;
           }
         }
         
