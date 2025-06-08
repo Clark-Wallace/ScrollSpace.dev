@@ -45,7 +45,7 @@ const AuthenticatedChatRoom: React.FC = () => {
 
   // Load initial chat data and set up subscriptions
   useEffect(() => {
-    if (user && profile) {
+    if (user) {
       joinChat();
     }
     
@@ -61,7 +61,7 @@ const AuthenticatedChatRoom: React.FC = () => {
         fragmentSubscription.current.unsubscribe();
       }
     };
-  }, [user, profile]);
+  }, [user]);
 
   // Handle leaving chat when component unmounts or user leaves
   useEffect(() => {
@@ -129,7 +129,11 @@ const AuthenticatedChatRoom: React.FC = () => {
   }, [user, profile]);
 
   const joinChat = async () => {
-    const currentUser = profile;
+    // Create a fallback profile if none exists
+    const currentUser = profile || { 
+      username: user?.email?.split('@')[0] || 'user',
+      display_name: user?.email?.split('@')[0] || 'User'
+    };
     if (!currentUser) return;
 
     setIsConnecting(true);
@@ -424,7 +428,7 @@ const AuthenticatedChatRoom: React.FC = () => {
     );
   }
 
-  if (!user || !profile) {
+  if (!user) {
     return (
       <div className="min-h-screen bg-transparent text-white p-6 flex items-center justify-center">
         <div className="text-center space-y-6 max-w-md mx-auto">
