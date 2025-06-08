@@ -27,7 +27,9 @@
       "Bash(pkill:*)",
       "WebFetch(domain:scrollspace.dev)",
       "Bash(grep:*)",
-      "Bash(rg:*)"
+      "Bash(rg:*)",
+      "Bash(node:*)",
+      "Bash(open test-auth.html)"
     ],
     "deny": []
   }

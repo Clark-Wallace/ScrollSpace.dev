@@ -36,11 +36,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Get initial session
     const getInitialSession = async () => {
       try {
+        console.log('Getting initial session...');
         const currentUser = await authAPI.getCurrentUser();
+        console.log('Current user from initial session:', currentUser);
         setUser(currentUser);
         
         if (currentUser) {
+          console.log('Fetching initial profile for user:', currentUser.id);
           const userProfile = await authAPI.getUserProfile(currentUser.id);
+          console.log('Initial profile result:', userProfile);
           setProfile(userProfile);
           
           // Update presence
@@ -60,30 +64,41 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('Auth state changed:', event, session?.user?.id);
       
       if (session?.user) {
+        console.log('User found, setting user state');
         setUser(session.user);
         
         // Get or create user profile
+        console.log('Fetching user profile for:', session.user.id);
         let userProfile = await authAPI.getUserProfile(session.user.id);
+        console.log('User profile result:', userProfile);
         
         // If no profile exists (new user), create one
-        if (!userProfile && session.user.user_metadata) {
+        if (!userProfile) {
+          console.log('No profile found, creating new profile');
           try {
+            const username = session.user.user_metadata?.username || session.user.email?.split('@')[0] || 'user';
+            const displayName = session.user.user_metadata?.display_name;
+            console.log('Creating profile with username:', username, 'displayName:', displayName);
+            
             userProfile = await authAPI.createUserProfile(
               session.user.id,
-              session.user.user_metadata.username || session.user.email?.split('@')[0] || 'user',
-              session.user.user_metadata.display_name
+              username,
+              displayName
             );
+            console.log('Profile created:', userProfile);
           } catch (error) {
             console.error('Error creating user profile:', error);
           }
         }
         
+        console.log('Setting profile state:', userProfile);
         setProfile(userProfile);
         
         if (userProfile) {
           await authAPI.updateUserPresence(session.user.id, true);
         }
       } else {
+        console.log('No session, clearing user state');
         setUser(null);
         setProfile(null);
       }
