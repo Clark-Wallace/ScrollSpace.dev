@@ -38,8 +38,26 @@ import Layout from '../layouts/Layout.astro';
     
     return React.createElement(AuthProvider, null,
       React.createElement('div', null,
+        // Test element to verify positioning works
         React.createElement('div', {
-          className: 'fixed top-4 right-4 z-30'
+          className: 'fixed top-4 right-4 z-50',
+          style: {
+            backgroundColor: 'rgba(255, 0, 0, 0.5)',
+            color: 'white',
+            padding: '8px',
+            border: '2px solid red',
+            fontSize: '14px',
+            fontFamily: 'monospace'
+          }
+        }, 'TEST_AUTH_AREA'),
+        // Auth nav below the test
+        React.createElement('div', {
+          className: 'fixed top-16 right-4 z-50',
+          style: {
+            backgroundColor: 'rgba(0, 255, 0, 0.1)',
+            padding: '8px',
+            border: '2px solid green'
+          }
         }, React.createElement(AuthNav)),
         React.createElement(AuthenticatedChatRoom)
       )
