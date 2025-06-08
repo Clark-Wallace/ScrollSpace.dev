@@ -11,7 +11,6 @@ import AuthForm from './AuthForm';
 
 const AuthenticatedChatRoom: React.FC = () => {
   const { user, profile, loading: authLoading } = useAuth();
-  const [bypassSession, setBypassSession] = useState<{username: string} | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [users, setUsers] = useState<ChatUser[]>([]);
   const [currentMessage, setCurrentMessage] = useState('');
