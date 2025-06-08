@@ -540,5 +540,4 @@ export const profileAPI = {
 };
 
 // Backward compatibility exports
-export { supabase };
 export const chatAPI = authChatAPI;

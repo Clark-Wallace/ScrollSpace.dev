@@ -424,7 +424,7 @@ const AuthenticatedChatRoom: React.FC = () => {
                  fontFamily: 'Courier New, monospace'
                }}>
             <div className="text-green-400 text-sm font-mono mb-4">
-              >> AUTHENTICATED_ACCESS_REQUIRED
+              &gt;&gt; AUTHENTICATED_ACCESS_REQUIRED
             </div>
             <p className="text-green-300 font-mono text-sm mb-6">
               Neural link authentication required to access the ScrollSpace Matrix chat system.

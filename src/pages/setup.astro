@@ -31,10 +31,7 @@ import Layout from '../layouts/Layout.astro';
           <div class="border-l-2 border-green-400 pl-4">
             <p class="text-green-300 font-bold">3. Copy and Run This SQL:</p>
             <div class="bg-black border border-gray-600 p-4 mt-2 overflow-x-auto">
-              <pre class="text-xs text-gray-300"><code>-- Enable Row Level Security
-ALTER TABLE auth.users ENABLE ROW LEVEL SECURITY;
-
--- Create user_profiles table
+              <pre class="text-xs text-gray-300"><code>-- Create user_profiles table
 CREATE TABLE IF NOT EXISTS user_profiles (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE NOT NULL,
@@ -51,28 +48,32 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create chat_messages table (updated with user_id)
+-- Create chat_messages table (if it doesn't exist)
 CREATE TABLE IF NOT EXISTS chat_messages (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   username TEXT NOT NULL,
   message TEXT NOT NULL,
   type TEXT DEFAULT 'message' CHECK (type IN ('message', 'join', 'leave', 'system')),
   timestamp TIMESTAMPTZ NOT NULL,
-  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create chat_users table (updated with user_id)
+-- Add user_id column to existing tables if it doesn't exist
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+
+-- Create chat_users table (if it doesn't exist)
 CREATE TABLE IF NOT EXISTS chat_users (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
   status TEXT DEFAULT 'online' CHECK (status IN ('online', 'away', 'busy')),
   last_seen TIMESTAMPTZ DEFAULT NOW(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create signal_fragments table (updated with user_id)
+-- Add user_id column to existing tables if it doesn't exist
+ALTER TABLE chat_users ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+
+-- Create signal_fragments table (if it doesn't exist)
 CREATE TABLE IF NOT EXISTS signal_fragments (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   fragment_id TEXT UNIQUE NOT NULL,
@@ -81,29 +82,92 @@ CREATE TABLE IF NOT EXISTS signal_fragments (
   rarity TEXT DEFAULT 'common' CHECK (rarity IN ('common', 'rare', 'encrypted', 'corrupted')),
   available BOOLEAN DEFAULT true,
   claimed_by TEXT,
-  claimed_by_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   claimed_at TIMESTAMPTZ,
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create fragment_pickups table for logging (updated with user_id)
+-- Add user_id column to existing tables if it doesn't exist
+ALTER TABLE signal_fragments ADD COLUMN IF NOT EXISTS claimed_by_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+
+-- Create fragment_pickups table for logging (if it doesn't exist)
 CREATE TABLE IF NOT EXISTS fragment_pickups (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   fragment_id TEXT NOT NULL,
   username TEXT NOT NULL,
-  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   content TEXT NOT NULL,
   rarity TEXT NOT NULL,
   picked_up_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enable Row Level Security
-ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE chat_users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE signal_fragments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE fragment_pickups ENABLE ROW LEVEL SECURITY;
+-- Add user_id column to existing tables if it doesn't exist
+ALTER TABLE fragment_pickups ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+
+-- Enable Row Level Security (only if not already enabled)
+DO $$
+BEGIN
+  -- Enable RLS for user_profiles if not already enabled
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_tables 
+    WHERE tablename = 'user_profiles' 
+    AND rowsecurity = true
+  ) THEN
+    ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+  END IF;
+  
+  -- Enable RLS for chat_messages if not already enabled
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_tables 
+    WHERE tablename = 'chat_messages' 
+    AND rowsecurity = true
+  ) THEN
+    ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+  END IF;
+  
+  -- Enable RLS for chat_users if not already enabled
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_tables 
+    WHERE tablename = 'chat_users' 
+    AND rowsecurity = true
+  ) THEN
+    ALTER TABLE chat_users ENABLE ROW LEVEL SECURITY;
+  END IF;
+  
+  -- Enable RLS for signal_fragments if not already enabled
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_tables 
+    WHERE tablename = 'signal_fragments' 
+    AND rowsecurity = true
+  ) THEN
+    ALTER TABLE signal_fragments ENABLE ROW LEVEL SECURITY;
+  END IF;
+  
+  -- Enable RLS for fragment_pickups if not already enabled
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_tables 
+    WHERE tablename = 'fragment_pickups' 
+    AND rowsecurity = true
+  ) THEN
+    ALTER TABLE fragment_pickups ENABLE ROW LEVEL SECURITY;
+  END IF;
+END $$;
+
+-- Drop existing policies if they exist to avoid conflicts
+DROP POLICY IF EXISTS "Users can view all profiles" ON user_profiles;
+DROP POLICY IF EXISTS "Users can insert their own profile" ON user_profiles;
+DROP POLICY IF EXISTS "Users can update their own profile" ON user_profiles;
+DROP POLICY IF EXISTS "Anyone can read messages" ON chat_messages;
+DROP POLICY IF EXISTS "Anyone can insert messages" ON chat_messages;
+DROP POLICY IF EXISTS "Anyone can read users" ON chat_users;
+DROP POLICY IF EXISTS "Anyone can insert users" ON chat_users;
+DROP POLICY IF EXISTS "Anyone can update users" ON chat_users;
+DROP POLICY IF EXISTS "Anyone can delete users" ON chat_users;
+DROP POLICY IF EXISTS "Anyone can read fragments" ON signal_fragments;
+DROP POLICY IF EXISTS "Anyone can insert fragments" ON signal_fragments;
+DROP POLICY IF EXISTS "Anyone can update fragments" ON signal_fragments;
+DROP POLICY IF EXISTS "Anyone can delete fragments" ON signal_fragments;
+DROP POLICY IF EXISTS "Anyone can read pickups" ON fragment_pickups;
+DROP POLICY IF EXISTS "Anyone can insert pickups" ON fragment_pickups;
 
 -- User profile policies
 CREATE POLICY "Users can view all profiles" ON user_profiles FOR SELECT USING (true);
@@ -146,12 +210,54 @@ CREATE INDEX IF NOT EXISTS idx_signal_fragments_claimed_by_user_id ON signal_fra
 CREATE INDEX IF NOT EXISTS idx_fragment_pickups_username ON fragment_pickups(username);
 CREATE INDEX IF NOT EXISTS idx_fragment_pickups_user_id ON fragment_pickups(user_id);
 
--- Enable realtime for all tables
-ALTER PUBLICATION supabase_realtime ADD TABLE user_profiles;
-ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
-ALTER PUBLICATION supabase_realtime ADD TABLE chat_users;
-ALTER PUBLICATION supabase_realtime ADD TABLE signal_fragments;
-ALTER PUBLICATION supabase_realtime ADD TABLE fragment_pickups;</code></pre>
+-- Enable realtime for tables (only if not already added)
+DO $$
+BEGIN
+  -- Add user_profiles to realtime if not already added
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' 
+    AND tablename = 'user_profiles'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE user_profiles;
+  END IF;
+  
+  -- Add chat_messages to realtime if not already added
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' 
+    AND tablename = 'chat_messages'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
+  END IF;
+  
+  -- Add chat_users to realtime if not already added
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' 
+    AND tablename = 'chat_users'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE chat_users;
+  END IF;
+  
+  -- Add signal_fragments to realtime if not already added
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' 
+    AND tablename = 'signal_fragments'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE signal_fragments;
+  END IF;
+  
+  -- Add fragment_pickups to realtime if not already added
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' 
+    AND tablename = 'fragment_pickups'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE fragment_pickups;
+  END IF;
+END $$;</code></pre>
             </div>
             <button 
               onclick="copyToClipboard()" 

@@ -3,42 +3,53 @@ import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="ScrollSpace Chat" description="Retro AOL-style chatroom for ScrollSpace community">
-  <!-- Auth Navigation -->
-  <div class="fixed top-4 right-4 z-30">
-    <div id="auth-nav"></div>
-  </div>
-
-  <!-- Chat Room Container -->
-  <div id="chat-container"></div>
+  <!-- Chat App Container -->
+  <div id="chat-app"></div>
 </Layout>
 
-<!-- React Components -->
 <script>
   import React from 'react';
   import { createRoot } from 'react-dom/client';
-  import { AuthProvider } from '../components/AuthContext.tsx';
-  import AuthNav from '../components/AuthNav.tsx';
-  import AuthenticatedChatRoom from '../components/AuthenticatedChatRoom.tsx';
-
-  // Initialize Auth Navigation
-  const authNavContainer = document.getElementById('auth-nav');
-  if (authNavContainer) {
-    const authRoot = createRoot(authNavContainer);
-    authRoot.render(
-      React.createElement(AuthProvider, null,
-        React.createElement(AuthNav)
-      )
-    );
-  }
-
-  // Initialize Chat Room with Auth
-  const chatContainer = document.getElementById('chat-container');
-  if (chatContainer) {
-    const chatRoot = createRoot(chatContainer);
-    chatRoot.render(
-      React.createElement(AuthProvider, null,
+  
+  // Define the components inline to avoid SSR issues
+  const ChatApp = () => {
+    const [AuthProvider, setAuthProvider] = React.useState(null);
+    const [AuthNav, setAuthNav] = React.useState(null);
+    const [AuthenticatedChatRoom, setAuthenticatedChatRoom] = React.useState(null);
+    
+    React.useEffect(() => {
+      // Dynamically import components to avoid SSR
+      Promise.all([
+        import('../components/AuthContext'),
+        import('../components/AuthNav'),
+        import('../components/AuthenticatedChatRoom')
+      ]).then(([authCtx, authNav, chatRoom]) => {
+        setAuthProvider(() => authCtx.default);
+        setAuthNav(() => authNav.default);
+        setAuthenticatedChatRoom(() => chatRoom.default);
+      });
+    }, []);
+    
+    if (!AuthProvider || !AuthNav || !AuthenticatedChatRoom) {
+      return React.createElement('div', {
+        className: 'min-h-screen bg-black text-green-400 flex items-center justify-center font-mono'
+      }, 'LOADING_NEURAL_INTERFACE...');
+    }
+    
+    return React.createElement(AuthProvider, null,
+      React.createElement('div', null,
+        React.createElement('div', {
+          className: 'fixed top-4 right-4 z-30'
+        }, React.createElement(AuthNav)),
         React.createElement(AuthenticatedChatRoom)
       )
     );
+  };
+
+  // Initialize the app
+  const container = document.getElementById('chat-app');
+  if (container) {
+    const root = createRoot(container);
+    root.render(React.createElement(ChatApp));
   }
 </script>
