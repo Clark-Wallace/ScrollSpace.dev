@@ -11,6 +11,7 @@ import AuthForm from './AuthForm';
 
 const AuthenticatedChatRoom: React.FC = () => {
   const { user, profile, loading: authLoading } = useAuth();
+  const [bypassSession, setBypassSession] = useState<{username: string} | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [users, setUsers] = useState<ChatUser[]>([]);
   const [currentMessage, setCurrentMessage] = useState('');
@@ -43,9 +44,18 @@ const AuthenticatedChatRoom: React.FC = () => {
     }
   }, [user, profile]);
 
+  // Check for bypass session
+  useEffect(() => {
+    const bypassActive = localStorage.getItem('bypass_session');
+    const bypassUsername = localStorage.getItem('bypass_username');
+    if (bypassActive === 'true' && bypassUsername) {
+      setBypassSession({ username: bypassUsername });
+    }
+  }, []);
+
   // Load initial chat data and set up subscriptions
   useEffect(() => {
-    if (user && profile) {
+    if ((user && profile) || bypassSession) {
       joinChat();
     }
     
@@ -61,7 +71,7 @@ const AuthenticatedChatRoom: React.FC = () => {
         fragmentSubscription.current.unsubscribe();
       }
     };
-  }, [user, profile]);
+  }, [user, profile, bypassSession]);
 
   // Handle leaving chat when component unmounts or user leaves
   useEffect(() => {
@@ -129,7 +139,8 @@ const AuthenticatedChatRoom: React.FC = () => {
   }, [user, profile]);
 
   const joinChat = async () => {
-    if (!user || !profile) return;
+    const currentUser = profile || bypassSession;
+    if (!currentUser) return;
 
     setIsConnecting(true);
     setError(null);
@@ -139,7 +150,7 @@ const AuthenticatedChatRoom: React.FC = () => {
       await autoSetup();
       
       // Join chat with authenticated user info
-      await chatAPI.joinChat(profile.username);
+      await chatAPI.joinChat(currentUser.username);
       
       // Load recent messages
       const recentMessages = await chatAPI.getMessages(50);
@@ -414,7 +425,7 @@ const AuthenticatedChatRoom: React.FC = () => {
     );
   }
 
-  if (!user || !profile) {
+  if ((!user || !profile) && !bypassSession) {
     return (
       <div className="min-h-screen bg-transparent text-white p-6 flex items-center justify-center">
         <div className="text-center space-y-6 max-w-md mx-auto">
@@ -477,15 +488,15 @@ const AuthenticatedChatRoom: React.FC = () => {
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 </div>
                 <span className="text-xs font-mono text-green-400 tracking-wider">
-                  [NEURAL_NET] {profile.username}@scrollspace.matrix
+                  [NEURAL_NET] {(profile || bypassSession)?.username}@scrollspace.matrix
                 </span>
               </div>
               <div className="flex items-center space-x-3">
                 <span className="text-xs font-mono text-green-400 hidden md:inline">
-                  USERS_ONLINE: {users.length} | FRAGMENTS: {profile.total_fragments}
+                  USERS_ONLINE: {users.length} | FRAGMENTS: {profile?.total_fragments || 0}
                 </span>
                 <span className="text-xs font-mono text-green-400 md:hidden">
-                  USERS: {users.length} | FRAGS: {profile.total_fragments}
+                  USERS: {users.length} | FRAGS: {profile?.total_fragments || 0}
                 </span>
               </div>
             </div>
