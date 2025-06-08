@@ -17,7 +17,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ isOpen, onClose, initialMode = 'log
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { signIn, signUp, signInWithOAuth } = useAuth();
+  const { signIn, signUp } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,18 +44,6 @@ const AuthForm: React.FC<AuthFormProps> = ({ isOpen, onClose, initialMode = 'log
     }
   };
 
-  const handleOAuthLogin = async (provider: 'github' | 'google') => {
-    if (loading) return;
-    
-    try {
-      setError(null);
-      await signInWithOAuth(provider);
-      onClose();
-      resetForm();
-    } catch (err: any) {
-      setError(err.message || `${provider} authentication failed`);
-    }
-  };
 
   const resetForm = () => {
     setEmail('');
@@ -147,43 +135,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ isOpen, onClose, initialMode = 'log
                 </button>
               </div>
 
-              {/* OAuth Buttons */}
-              <div className="space-y-3 mb-6">
-                <button
-                  onClick={() => handleOAuthLogin('github')}
-                  disabled={loading}
-                  className="w-full bg-black hover:bg-gray-900 border border-green-400 text-green-400 font-mono py-3 px-4 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
-                  style={{ 
-                    borderStyle: 'outset',
-                    boxShadow: '0 0 10px rgba(0, 255, 65, 0.3)'
-                  }}
-                >
-                  <span>🐙</span>
-                  <span>CONNECT_GITHUB_NODE</span>
-                </button>
-                
-                <button
-                  onClick={() => handleOAuthLogin('google')}
-                  disabled={loading}
-                  className="w-full bg-black hover:bg-gray-900 border border-green-400 text-green-400 font-mono py-3 px-4 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
-                  style={{ 
-                    borderStyle: 'outset',
-                    boxShadow: '0 0 10px rgba(0, 255, 65, 0.3)'
-                  }}
-                >
-                  <span>🔍</span>
-                  <span>CONNECT_GOOGLE_NODE</span>
-                </button>
-              </div>
-
-              {/* Divider */}
-              <div className="flex items-center space-x-4 mb-6">
-                <div className="flex-1 border-t border-green-400/30"></div>
-                <span className="text-green-400 font-mono text-xs">OR_MANUAL_AUTH</span>
-                <div className="flex-1 border-t border-green-400/30"></div>
-              </div>
-
-              {/* Manual Form */}
+              {/* Authentication Form */}
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-mono text-green-400 mb-1 tracking-wider">

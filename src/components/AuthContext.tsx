@@ -8,7 +8,6 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, username: string, displayName?: string) => Promise<void>;
-  signInWithOAuth: (provider: 'github' | 'google') => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -137,13 +136,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const signInWithOAuth = async (provider: 'github' | 'google') => {
-    try {
-      await authAPI.signInWithOAuth(provider);
-    } catch (error) {
-      throw error;
-    }
-  };
 
   const signOut = async () => {
     try {
@@ -181,7 +173,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     loading,
     signIn,
     signUp,
-    signInWithOAuth,
     signOut,
     updateProfile,
     refreshProfile
