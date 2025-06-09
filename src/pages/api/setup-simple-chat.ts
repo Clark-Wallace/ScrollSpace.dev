@@ -21,6 +21,13 @@ export const POST: APIRoute = async () => {
 
         -- Enable RLS (Row Level Security) but allow all operations for simplicity
         ALTER TABLE simple_chat_messages ENABLE ROW LEVEL SECURITY;
+        
+        -- Create policy to allow all operations
+        CREATE POLICY IF NOT EXISTS "Allow all operations on simple_chat_messages" 
+        ON simple_chat_messages FOR ALL USING (true) WITH CHECK (true);
+        
+        -- Enable realtime for this table
+        ALTER PUBLICATION supabase_realtime ADD TABLE simple_chat_messages;
       `
     });
 

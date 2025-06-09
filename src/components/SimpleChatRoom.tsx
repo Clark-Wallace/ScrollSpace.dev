@@ -42,6 +42,8 @@ const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave }) =>
 
     const setupConnection = async () => {
       console.log('Setting up chat connection for:', username);
+      console.log('Supabase URL:', supabase.supabaseUrl);
+      console.log('Supabase key configured:', !!supabase.supabaseKey);
       
       try {
         // Always show welcome messages first
@@ -63,13 +65,17 @@ const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave }) =>
         ];
         setMessages(welcomeMessages);
 
-        // Load recent messages from database
+        // Load recent messages from database (last 24 hours to get better user tracking)
         console.log('Loading recent messages...');
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
         const { data: recentMessages, error } = await supabase
           .from('simple_chat_messages')
           .select('*')
+          .gte('created_at', oneDayAgo)
           .order('created_at', { ascending: true })
-          .limit(50);
+          .limit(100);
+        
+        console.log('Query result:', { data: recentMessages, error });
 
         if (error) {
           console.error('Error loading messages:', error);
@@ -93,12 +99,52 @@ const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave }) =>
             type: msg.type || 'message'
           }));
           
+          // Build active users list - much more aggressive approach
+          const activeUsers = new Set([username]); // Start with current user
+          const recentUserActivity = new Map();
+          const now = Date.now();
+          const ACTIVE_THRESHOLD = 30 * 60 * 1000; // 30 minutes
+          
+          // Track ALL users who have any activity recently
+          formattedMessages.forEach(msg => {
+            const msgTime = new Date(msg.timestamp).getTime();
+            const isRecent = (now - msgTime) < ACTIVE_THRESHOLD;
+            
+            if (msg.username && msg.username !== 'System' && isRecent) {
+              if (msg.type === 'join') {
+                const joiningUser = msg.message.replace(' has entered the matrix', '');
+                if (joiningUser && joiningUser.trim()) {
+                  activeUsers.add(joiningUser);
+                  recentUserActivity.set(joiningUser, msgTime);
+                }
+              } else if (msg.type === 'leave') {
+                const leavingUser = msg.message.replace(' has left the matrix', '');
+                // Only remove if the leave message is very recent (5 minutes)
+                if (leavingUser && (now - msgTime) < 5 * 60 * 1000) {
+                  activeUsers.delete(leavingUser);
+                }
+              } else if (msg.type === 'message') {
+                // Add ANY user who sent a message recently
+                activeUsers.add(msg.username);
+                recentUserActivity.set(msg.username, msgTime);
+              }
+            }
+          });
+          
+          console.log('Recent user activity:', Object.fromEntries(recentUserActivity));
+          console.log('Active users found:', Array.from(activeUsers));
+          
+          setUsers(Array.from(activeUsers));
+          
           // Combine welcome messages with recent messages
           setMessages(prev => [...welcomeMessages, ...formattedMessages]);
         }
 
         // Set up real-time subscription
         console.log('Setting up real-time subscription...');
+        console.log('Checking Supabase realtime capabilities...');
+        
+        // Test if realtime is enabled
         const channel = supabase
           .channel('simple_chat_' + Date.now()) // Unique channel name
           .on(
@@ -119,6 +165,31 @@ const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave }) =>
                   type: payload.new.type || 'message'
                 };
                 setMessages(prev => [...prev, newMessage]);
+                
+                // Update users list based on all message activity
+                if (newMessage.type === 'join') {
+                  const joiningUser = newMessage.message.replace(' has entered the matrix', '');
+                  setUsers(prev => {
+                    if (!prev.includes(joiningUser)) {
+                      console.log('Adding user to list:', joiningUser);
+                      return [...prev, joiningUser];
+                    }
+                    return prev;
+                  });
+                } else if (newMessage.type === 'leave') {
+                  const leavingUser = newMessage.message.replace(' has left the matrix', '');
+                  console.log('Removing user from list:', leavingUser);
+                  setUsers(prev => prev.filter(user => user !== leavingUser));
+                } else if (newMessage.type === 'message' && newMessage.username !== 'System') {
+                  // Add message senders to users list if not already there
+                  setUsers(prev => {
+                    if (!prev.includes(newMessage.username)) {
+                      console.log('Adding message sender to users list:', newMessage.username);
+                      return [...prev, newMessage.username];
+                    }
+                    return prev;
+                  });
+                }
               }
             }
           )
@@ -178,14 +249,18 @@ const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave }) =>
   }, [username]);
 
   const sendJoinMessage = async () => {
+    console.log('Sending join message for:', username);
     try {
-      await supabase
+      const { data, error } = await supabase
         .from('simple_chat_messages')
         .insert({
           username: 'System',
           message: `${username} has entered the matrix`,
           type: 'join'
-        });
+        })
+        .select();
+      
+      console.log('Join message result:', { data, error });
     } catch (error) {
       console.error('Failed to send join message:', error);
     }
