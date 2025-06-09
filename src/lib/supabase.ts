@@ -554,18 +554,34 @@ export const authAPI = {
 
   // Get user profile
   async getUserProfile(userId: string): Promise<UserProfile | null> {
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
+    try {
+      console.log('getUserProfile: Fetching profile for user:', userId);
+      
+      // Add timeout to prevent hanging
+      const profilePromise = supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
 
-    if (error) {
-      console.error('Error fetching user profile:', error);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
+      );
+
+      const { data, error } = await Promise.race([profilePromise, timeoutPromise]);
+      
+      console.log('getUserProfile: Result - Data:', data, 'Error:', error);
+
+      if (error) {
+        console.error('Error fetching user profile:', error);
+        return null;
+      }
+
+      return data;
+    } catch (err) {
+      console.error('getUserProfile: Failed with error:', err);
       return null;
     }
-
-    return data;
   },
 
   // Create user profile

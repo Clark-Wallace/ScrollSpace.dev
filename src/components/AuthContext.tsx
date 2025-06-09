@@ -85,36 +85,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('User found, setting user state');
         setUser(session.user);
         
-        // Get or create user profile
+        // Get or create user profile with timeout
         console.log('Fetching user profile for:', session.user.id);
-        let userProfile = await authAPI.getUserProfile(session.user.id);
-        console.log('User profile result:', userProfile);
         
-        // If no profile exists (new user), create one
-        if (!userProfile) {
-          console.log('No profile found, creating new profile');
-          try {
-            const username = session.user.user_metadata?.username || session.user.email?.split('@')[0] || 'user';
-            const displayName = session.user.user_metadata?.display_name;
-            console.log('Creating profile with username:', username, 'displayName:', displayName);
-            
-            userProfile = await authAPI.createUserProfile(
-              session.user.id,
-              username,
-              displayName
-            );
-            console.log('Profile created:', userProfile);
-          } catch (error) {
-            console.error('Error creating user profile:', error);
-            // Don't create fallback - require proper profile in database
+        try {
+          let userProfile = await Promise.race([
+            authAPI.getUserProfile(session.user.id),
+            new Promise((resolve) => setTimeout(() => resolve(null), 3000)) // 3 second timeout
+          ]);
+          
+          console.log('User profile result:', userProfile);
+          
+          // If no profile exists (new user), create one
+          if (!userProfile) {
+            console.log('No profile found, creating new profile');
+            try {
+              const username = session.user.user_metadata?.username || session.user.email?.split('@')[0] || 'user';
+              const displayName = session.user.user_metadata?.display_name;
+              console.log('Creating profile with username:', username, 'displayName:', displayName);
+              
+              userProfile = await Promise.race([
+                authAPI.createUserProfile(session.user.id, username, displayName),
+                new Promise((resolve) => setTimeout(() => resolve(null), 3000)) // 3 second timeout
+              ]);
+              
+              console.log('Profile created:', userProfile);
+            } catch (error) {
+              console.error('Error creating user profile:', error);
+            }
           }
-        }
-        
-        console.log('Setting profile state:', userProfile);
-        setProfile(userProfile);
-        
-        if (userProfile) {
-          await authAPI.updateUserPresence(session.user.id, true);
+          
+          console.log('Setting profile state:', userProfile);
+          setProfile(userProfile);
+          
+        } catch (error) {
+          console.error('Profile operations failed:', error);
+          setProfile(null);
         }
       } else {
         console.log('No session, clearing user state');
