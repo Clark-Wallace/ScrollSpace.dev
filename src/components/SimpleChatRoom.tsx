@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { supabase } from '../lib/supabase';
 
 interface SimpleChatRoomProps {
   username: string;
@@ -18,8 +19,10 @@ const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave }) =>
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [users, setUsers] = useState<string[]>([username]);
+  const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
+  const channelRef = useRef(null);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -33,57 +36,156 @@ const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave }) =>
     }
   }, []);
 
-  // Add initial system messages
+  // Set up real-time connection
   useEffect(() => {
-    const welcomeMessages: ChatMessage[] = [
-      {
-        id: 'welcome-1',
-        username: 'System',
-        message: `Welcome to ScrollSpace Matrix, ${username}. Neural link established.`,
-        timestamp: new Date(),
-        type: 'system'
-      },
-      {
-        id: 'welcome-2',
-        username: 'System',
-        message: 'Type /help for available commands.',
-        timestamp: new Date(),
-        type: 'system'
-      }
-    ];
-    setMessages(welcomeMessages);
+    const setupConnection = async () => {
+      try {
+        // Load recent messages from database
+        const { data: recentMessages, error } = await supabase
+          .from('simple_chat_messages')
+          .select('*')
+          .order('created_at', { ascending: true })
+          .limit(50);
 
-    // Add join message
-    const joinMessage: ChatMessage = {
-      id: Date.now().toString(),
-      username: 'System',
-      message: `${username} has entered the matrix`,
-      timestamp: new Date(),
-      type: 'join'
+        if (!error && recentMessages) {
+          const formattedMessages = recentMessages.map(msg => ({
+            id: msg.id,
+            username: msg.username,
+            message: msg.message,
+            timestamp: new Date(msg.created_at),
+            type: msg.type || 'message'
+          }));
+          setMessages(formattedMessages);
+        }
+
+        // Set up real-time subscription
+        const channel = supabase
+          .channel('simple_chat')
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'simple_chat_messages'
+            },
+            (payload) => {
+              const newMessage = {
+                id: payload.new.id,
+                username: payload.new.username,
+                message: payload.new.message,
+                timestamp: new Date(payload.new.created_at),
+                type: payload.new.type || 'message'
+              };
+              setMessages(prev => [...prev, newMessage]);
+            }
+          )
+          .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+              setIsConnected(true);
+              // Send join message
+              sendJoinMessage();
+            }
+          });
+
+        channelRef.current = channel;
+
+      } catch (error) {
+        console.error('Failed to setup connection:', error);
+        // Add offline messages if connection fails
+        const welcomeMessages: ChatMessage[] = [
+          {
+            id: 'welcome-1',
+            username: 'System',
+            message: `Welcome to ScrollSpace Matrix, ${username}. Running in offline mode.`,
+            timestamp: new Date(),
+            type: 'system'
+          },
+          {
+            id: 'welcome-2',
+            username: 'System',
+            message: 'Type /help for available commands.',
+            timestamp: new Date(),
+            type: 'system'
+          }
+        ];
+        setMessages(welcomeMessages);
+      }
     };
-    setMessages(prev => [...prev, joinMessage]);
+
+    setupConnection();
+
+    // Cleanup on unmount
+    return () => {
+      if (channelRef.current) {
+        sendLeaveMessage();
+        channelRef.current.unsubscribe();
+      }
+    };
   }, [username]);
 
-  const sendMessage = () => {
+  const sendJoinMessage = async () => {
+    try {
+      await supabase
+        .from('simple_chat_messages')
+        .insert({
+          username: 'System',
+          message: `${username} has entered the matrix`,
+          type: 'join'
+        });
+    } catch (error) {
+      console.error('Failed to send join message:', error);
+    }
+  };
+
+  const sendLeaveMessage = async () => {
+    try {
+      await supabase
+        .from('simple_chat_messages')
+        .insert({
+          username: 'System',
+          message: `${username} has left the matrix`,
+          type: 'leave'
+        });
+    } catch (error) {
+      console.error('Failed to send leave message:', error);
+    }
+  };
+
+  const sendMessage = async () => {
     if (!currentMessage.trim()) return;
 
-    // Handle commands
+    // Handle commands locally
     if (currentMessage.startsWith('/')) {
       handleCommand(currentMessage);
       setCurrentMessage('');
       return;
     }
 
-    const newMessage: ChatMessage = {
-      id: Date.now().toString(),
-      username,
-      message: currentMessage,
-      timestamp: new Date(),
-      type: 'message'
-    };
-
-    setMessages(prev => [...prev, newMessage]);
+    const messageText = currentMessage;
     setCurrentMessage('');
+
+    try {
+      await supabase
+        .from('simple_chat_messages')
+        .insert({
+          username: username,
+          message: messageText,
+          type: 'message'
+        });
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      // Re-add the message to input if failed
+      setCurrentMessage(messageText);
+      // Add error message locally
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        username: 'System',
+        message: 'Failed to send message. Check your connection.',
+        timestamp: new Date(),
+        type: 'system'
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    }
   };
 
   const handleCommand = (command: string) => {
@@ -149,7 +251,10 @@ const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave }) =>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center relative z-10 gap-2">
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={onLeave}
+                  onClick={async () => {
+                    await sendLeaveMessage();
+                    onLeave();
+                  }}
                   className="text-green-400 hover:text-green-300 text-sm font-mono mr-2"
                   title="Leave matrix"
                 >
@@ -166,10 +271,10 @@ const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave }) =>
               </div>
               <div className="flex items-center space-x-3">
                 <span className="text-xs font-mono text-green-400 hidden md:inline">
-                  USERS_ONLINE: {users.length}
+                  STATUS: {isConnected ? 'CONNECTED' : 'CONNECTING...'}
                 </span>
                 <span className="text-xs font-mono text-green-400 md:hidden">
-                  USERS: {users.length}
+                  {isConnected ? 'ONLINE' : 'SYNC...'}
                 </span>
               </div>
             </div>
