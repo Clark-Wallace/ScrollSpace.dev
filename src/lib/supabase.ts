@@ -74,6 +74,23 @@ export interface UserAuth {
   email_confirmed_at?: string;
 }
 
+// Connection message throttling
+const connectionMessageThrottle = new Map<string, number>();
+const CONNECTION_MESSAGE_COOLDOWN = 30000; // 30 seconds
+
+function shouldSendConnectionMessage(username: string, type: 'join' | 'leave'): boolean {
+  const key = `${username}_${type}`;
+  const now = Date.now();
+  const lastSent = connectionMessageThrottle.get(key);
+  
+  if (!lastSent || now - lastSent > CONNECTION_MESSAGE_COOLDOWN) {
+    connectionMessageThrottle.set(key, now);
+    return true;
+  }
+  
+  return false;
+}
+
 // Chat API functions
 export const chatAPI = {
   // Send a message
@@ -167,8 +184,10 @@ export const chatAPI = {
       throw error;
     }
 
-    // Send join message
-    await this.sendMessage('System', `${username} has entered the chat`, 'join');
+    // Send join message (throttled)
+    if (shouldSendConnectionMessage(username, 'join')) {
+      await this.sendMessage('System', `${username} has entered the chat`, 'join');
+    }
 
     return data;
   },
@@ -184,8 +203,10 @@ export const chatAPI = {
       console.error('Error leaving chat:', error);
     }
 
-    // Send leave message
-    await this.sendMessage('System', `${username} has left the chat`, 'leave');
+    // Send leave message (throttled)
+    if (shouldSendConnectionMessage(username, 'leave')) {
+      await this.sendMessage('System', `${username} has left the chat`, 'leave');
+    }
   },
 
   async getOnlineUsers() {
@@ -232,10 +253,12 @@ export const chatAPI = {
       .select('username')
       .lt('last_seen', fiveMinutesAgo);
 
-    // Send leave messages for inactive users
+    // Send leave messages for inactive users (throttled)
     if (inactiveUsers && inactiveUsers.length > 0) {
       for (const user of inactiveUsers) {
-        await this.sendMessage('System', `${user.username} has left the chat (connection lost)`, 'leave');
+        if (shouldSendConnectionMessage(user.username, 'leave')) {
+          await this.sendMessage('System', `${user.username} has left the chat (connection lost)`, 'leave');
+        }
       }
     }
 

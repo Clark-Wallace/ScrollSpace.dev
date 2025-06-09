@@ -80,7 +80,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => {
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          className="bg-black/90 backdrop-blur-sm border border-green-400 shadow-2xl w-full max-w-lg relative"
+          className="bg-black/90 backdrop-blur-sm border border-green-400 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden relative flex flex-col"
           style={{ 
             boxShadow: '0 0 30px rgba(0, 255, 65, 0.4), inset 1px 1px 0px rgba(0, 255, 65, 0.2), inset -1px -1px 0px rgba(0, 0, 0, 0.8)',
             fontFamily: 'Courier New, monospace'
@@ -111,7 +111,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => {
           </div>
 
           {/* Profile Content */}
-          <div className="p-6 relative max-h-96 overflow-y-auto">
+          <div className="p-6 relative overflow-y-auto flex-1">
             {/* Scanlines Effect */}
             <div className="absolute inset-0 pointer-events-none" style={{
               background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 255, 65, 0.03) 2px, rgba(0, 255, 65, 0.03) 4px)'

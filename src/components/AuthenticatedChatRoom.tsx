@@ -485,6 +485,13 @@ const AuthenticatedChatRoom: React.FC = () => {
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-green-400/10 to-transparent animate-pulse"></div>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center relative z-10 gap-2">
               <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => window.history.back()}
+                  className="text-green-400 hover:text-green-300 text-sm font-mono mr-2"
+                  title="Go back"
+                >
+                  ← BACK
+                </button>
                 <div className="flex space-x-1">
                   <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                   <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>

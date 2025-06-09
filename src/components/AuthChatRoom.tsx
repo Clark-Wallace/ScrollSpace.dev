@@ -313,6 +313,64 @@ const AuthChatRoom: React.FC = () => {
     }
   };
 
+  // Group consecutive connection messages
+  const groupMessages = (messages: ChatMessage[]) => {
+    const grouped: ChatMessage[] = [];
+    let currentGroup: ChatMessage[] = [];
+    
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      
+      if (msg.type === 'join' || msg.type === 'leave') {
+        currentGroup.push(msg);
+      } else {
+        // If we have a group of connection messages, collapse them
+        if (currentGroup.length > 2) {
+          const joinCount = currentGroup.filter(m => m.type === 'join').length;
+          const leaveCount = currentGroup.filter(m => m.type === 'leave').length;
+          
+          if (joinCount > 0 || leaveCount > 0) {
+            const groupMessage: ChatMessage = {
+              id: `group-${currentGroup[0].id}`,
+              username: 'System',
+              message: `${joinCount} users connected, ${leaveCount} users disconnected`,
+              timestamp: currentGroup[currentGroup.length - 1].timestamp,
+              type: 'system'
+            };
+            grouped.push(groupMessage);
+          }
+        } else {
+          // Add individual messages if group is small
+          grouped.push(...currentGroup);
+        }
+        
+        currentGroup = [];
+        grouped.push(msg);
+      }
+    }
+    
+    // Handle remaining group at the end
+    if (currentGroup.length > 2) {
+      const joinCount = currentGroup.filter(m => m.type === 'join').length;
+      const leaveCount = currentGroup.filter(m => m.type === 'leave').length;
+      
+      if (joinCount > 0 || leaveCount > 0) {
+        const groupMessage: ChatMessage = {
+          id: `group-${currentGroup[0].id}`,
+          username: 'System',
+          message: `${joinCount} users connected, ${leaveCount} users disconnected`,
+          timestamp: currentGroup[currentGroup.length - 1].timestamp,
+          type: 'system'
+        };
+        grouped.push(groupMessage);
+      }
+    } else {
+      grouped.push(...currentGroup);
+    }
+    
+    return grouped;
+  };
+
   if (!isConnected && !error) {
     return (
       <div className="min-h-screen bg-transparent text-white p-6 flex items-center justify-center">
@@ -405,7 +463,7 @@ const AuthChatRoom: React.FC = () => {
                 </div>
                 
                 <AnimatePresence>
-                  {messages.map((msg) => (
+                  {groupMessages(messages).map((msg) => (
                     <motion.div 
                       key={msg.id} 
                       initial={{ opacity: 0, x: -10 }}
@@ -422,13 +480,13 @@ const AuthChatRoom: React.FC = () => {
                         </div>
                       )}
                       {msg.type === 'join' && (
-                        <div className="text-green-400 text-xs italic animate-pulse">
-                          &gt;&gt; NEURAL_LINK_ESTABLISHED: {msg.message.replace(' has entered the chat', '')} &lt;&lt;
+                        <div className="text-green-400/60 text-xs italic opacity-70">
+                          + {msg.message.replace(' has entered the chat', '')} connected
                         </div>
                       )}
                       {msg.type === 'leave' && (
-                        <div className="text-red-400 text-xs italic">
-                          &gt;&gt; CONNECTION_TERMINATED: {msg.message.replace(' has left the chat', '')} &lt;&lt;
+                        <div className="text-red-400/60 text-xs italic opacity-70">
+                          - {msg.message.replace(' has left the chat', '')} disconnected
                         </div>
                       )}
                       {msg.type === 'system' && (

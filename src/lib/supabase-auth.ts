@@ -67,6 +67,23 @@ export interface FragmentPickup {
   picked_up_at: string;
 }
 
+// Connection message throttling for auth chat
+const authConnectionMessageThrottle = new Map<string, number>();
+const AUTH_CONNECTION_MESSAGE_COOLDOWN = 30000; // 30 seconds
+
+function shouldSendAuthConnectionMessage(username: string, type: 'join' | 'leave'): boolean {
+  const key = `${username}_${type}`;
+  const now = Date.now();
+  const lastSent = authConnectionMessageThrottle.get(key);
+  
+  if (!lastSent || now - lastSent > AUTH_CONNECTION_MESSAGE_COOLDOWN) {
+    authConnectionMessageThrottle.set(key, now);
+    return true;
+  }
+  
+  return false;
+}
+
 // Enhanced Auth-aware Chat API
 export const authChatAPI = {
   // Send a message (auth-aware)
@@ -179,8 +196,10 @@ export const authChatAPI = {
       })
       .eq('id', user.id);
 
-    // Send join message
-    await this.sendMessage(`${profile.username} has entered the chat`, 'join');
+    // Send join message (throttled)
+    if (shouldSendAuthConnectionMessage(profile.username, 'join')) {
+      await this.sendMessage(`${profile.username} has entered the chat`, 'join');
+    }
 
     return profile;
   },
@@ -205,8 +224,10 @@ export const authChatAPI = {
         .update({ status: 'offline' })
         .eq('id', user.id);
 
-      // Send leave message
-      await this.sendMessage(`${profile.username} has left the chat`, 'leave');
+      // Send leave message (throttled)
+      if (shouldSendAuthConnectionMessage(profile.username, 'leave')) {
+        await this.sendMessage(`${profile.username} has left the chat`, 'leave');
+      }
     }
   },
 

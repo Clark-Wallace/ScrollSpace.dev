@@ -33,6 +33,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Set a timeout to prevent infinite loading
+    const loadingTimeout = setTimeout(() => {
+      console.log('Auth loading timeout reached, setting loading to false');
+      setLoading(false);
+    }, 5000); // 5 seconds max
+
     // Get initial session
     const getInitialSession = async () => {
       try {
@@ -53,6 +59,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } catch (error) {
         console.error('Error getting initial session:', error);
       } finally {
+        clearTimeout(loadingTimeout);
         setLoading(false);
       }
     };
@@ -106,6 +113,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       setLoading(false);
     });
+
+    // Set loading to false after subscription is set up
+    setLoading(false);
 
     // Cleanup on unmount
     return () => {
