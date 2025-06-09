@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase';
 interface SimpleChatRoomProps {
   username: string;
   onLeave: () => void;
+  isAuthenticated?: boolean;
+  userId?: string;
 }
 
 interface ChatMessage {
@@ -15,7 +17,7 @@ interface ChatMessage {
   type: 'message' | 'join' | 'leave' | 'system';
 }
 
-const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave }) => {
+const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave, isAuthenticated = false, userId }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [users, setUsers] = useState<string[]>([username]);
@@ -400,7 +402,7 @@ const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave }) =>
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 </div>
                 <span className="text-xs font-mono text-green-400 tracking-wider">
-                  [NEURAL_NET] {username}@scrollspace.matrix
+                  [NEURAL_NET] {username}@scrollspace.matrix {isAuthenticated && '🔐'}
                 </span>
               </div>
               <div className="flex items-center space-x-3">
