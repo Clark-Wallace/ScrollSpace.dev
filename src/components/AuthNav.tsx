@@ -75,40 +75,16 @@ const AuthNav: React.FC<AuthNavProps> = ({ className = '' }) => {
   }
 
   return (
-    <>
-      <div className={`flex items-center space-x-2 ${className}`}>
-        <motion.button
-          onClick={() => openAuth('login')}
-          className="bg-black hover:bg-green-900/30 border border-green-400 text-green-400 px-4 py-2 font-mono text-sm transition-all"
-          style={{ 
-            borderStyle: 'outset',
-            boxShadow: '0 0 5px rgba(0, 255, 65, 0.3)'
-          }}
-          whileHover={{ 
-            scale: 1.02,
-            boxShadow: '0 0 15px rgba(0, 255, 65, 0.6)'
-          }}
-          whileTap={{ scale: 0.98 }}
-        >
-          NEURAL_LINK
-        </motion.button>
-
-        <motion.button
-          onClick={() => openAuth('register')}
-          className="bg-green-600 hover:bg-green-500 text-black px-4 py-2 font-mono text-sm font-bold transition-all"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          JOIN_MATRIX
-        </motion.button>
-      </div>
-
-      <AuthForm 
-        isOpen={showAuthForm} 
-        onClose={() => setShowAuthForm(false)}
-        initialMode={authMode}
-      />
-    </>
+    <div className={`flex items-center space-x-2 ${className}`}>
+      <motion.a
+        href="/chat"
+        className="bg-green-600 hover:bg-green-500 text-black px-4 py-2 font-mono text-sm font-bold transition-all"
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+      >
+        ENTER_MATRIX
+      </motion.a>
+    </div>
   );
 };
 
