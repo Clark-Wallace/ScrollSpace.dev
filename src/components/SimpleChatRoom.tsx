@@ -38,65 +38,18 @@ const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave }) =>
 
   // Set up real-time connection
   useEffect(() => {
+    let mounted = true;
+
     const setupConnection = async () => {
+      console.log('Setting up chat connection for:', username);
+      
       try {
-        // Load recent messages from database
-        const { data: recentMessages, error } = await supabase
-          .from('simple_chat_messages')
-          .select('*')
-          .order('created_at', { ascending: true })
-          .limit(50);
-
-        if (!error && recentMessages) {
-          const formattedMessages = recentMessages.map(msg => ({
-            id: msg.id,
-            username: msg.username,
-            message: msg.message,
-            timestamp: new Date(msg.created_at),
-            type: msg.type || 'message'
-          }));
-          setMessages(formattedMessages);
-        }
-
-        // Set up real-time subscription
-        const channel = supabase
-          .channel('simple_chat')
-          .on(
-            'postgres_changes',
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: 'simple_chat_messages'
-            },
-            (payload) => {
-              const newMessage = {
-                id: payload.new.id,
-                username: payload.new.username,
-                message: payload.new.message,
-                timestamp: new Date(payload.new.created_at),
-                type: payload.new.type || 'message'
-              };
-              setMessages(prev => [...prev, newMessage]);
-            }
-          )
-          .subscribe((status) => {
-            if (status === 'SUBSCRIBED') {
-              setIsConnected(true);
-              // Send join message
-              sendJoinMessage();
-            }
-          });
-
-        channelRef.current = channel;
-
-      } catch (error) {
-        console.error('Failed to setup connection:', error);
-        // Add offline messages if connection fails
+        // Always show welcome messages first
         const welcomeMessages: ChatMessage[] = [
           {
             id: 'welcome-1',
             username: 'System',
-            message: `Welcome to ScrollSpace Matrix, ${username}. Running in offline mode.`,
+            message: `Welcome to ScrollSpace Matrix, ${username}. Connecting...`,
             timestamp: new Date(),
             type: 'system'
           },
@@ -109,6 +62,105 @@ const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave }) =>
           }
         ];
         setMessages(welcomeMessages);
+
+        // Load recent messages from database
+        console.log('Loading recent messages...');
+        const { data: recentMessages, error } = await supabase
+          .from('simple_chat_messages')
+          .select('*')
+          .order('created_at', { ascending: true })
+          .limit(50);
+
+        if (error) {
+          console.error('Error loading messages:', error);
+          setMessages(prev => [...prev, {
+            id: 'error-1',
+            username: 'System',
+            message: `Connection failed: ${error.message}. Running in offline mode.`,
+            timestamp: new Date(),
+            type: 'system'
+          }]);
+          return;
+        }
+
+        if (mounted && recentMessages) {
+          console.log('Loaded', recentMessages.length, 'recent messages');
+          const formattedMessages = recentMessages.map(msg => ({
+            id: msg.id,
+            username: msg.username,
+            message: msg.message,
+            timestamp: new Date(msg.created_at),
+            type: msg.type || 'message'
+          }));
+          
+          // Combine welcome messages with recent messages
+          setMessages(prev => [...welcomeMessages, ...formattedMessages]);
+        }
+
+        // Set up real-time subscription
+        console.log('Setting up real-time subscription...');
+        const channel = supabase
+          .channel('simple_chat_' + Date.now()) // Unique channel name
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'simple_chat_messages'
+            },
+            (payload) => {
+              console.log('Received new message:', payload.new);
+              if (mounted) {
+                const newMessage = {
+                  id: payload.new.id,
+                  username: payload.new.username,
+                  message: payload.new.message,
+                  timestamp: new Date(payload.new.created_at),
+                  type: payload.new.type || 'message'
+                };
+                setMessages(prev => [...prev, newMessage]);
+              }
+            }
+          )
+          .subscribe((status) => {
+            console.log('Subscription status:', status);
+            if (mounted && status === 'SUBSCRIBED') {
+              setIsConnected(true);
+              // Send join message
+              sendJoinMessage();
+              // Update welcome message
+              setMessages(prev => prev.map(msg => 
+                msg.id === 'welcome-1' 
+                  ? { ...msg, message: `Welcome to ScrollSpace Matrix, ${username}. Connected!` }
+                  : msg
+              ));
+            } else if (status === 'CHANNEL_ERROR') {
+              setIsConnected(false);
+              if (mounted) {
+                setMessages(prev => [...prev, {
+                  id: 'error-2',
+                  username: 'System',
+                  message: 'Real-time connection failed. Messages may not sync.',
+                  timestamp: new Date(),
+                  type: 'system'
+                }]);
+              }
+            }
+          });
+
+        channelRef.current = channel;
+
+      } catch (error) {
+        console.error('Failed to setup connection:', error);
+        if (mounted) {
+          setMessages(prev => [...prev, {
+            id: 'error-3',
+            username: 'System',
+            message: `Setup failed: ${error.message}`,
+            timestamp: new Date(),
+            type: 'system'
+          }]);
+        }
       }
     };
 
@@ -116,7 +168,9 @@ const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave }) =>
 
     // Cleanup on unmount
     return () => {
+      mounted = false;
       if (channelRef.current) {
+        console.log('Cleaning up chat connection');
         sendLeaveMessage();
         channelRef.current.unsubscribe();
       }
@@ -203,7 +257,7 @@ const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave }) =>
     };
     
     if (cmd === '/help') {
-      addSystemMessage('[SYS] Available commands: /help, /users, /time, /clear, /matrix, /whoami, /leave');
+      addSystemMessage('[SYS] Available commands: /help, /users, /time, /clear, /matrix, /whoami, /leave, /refresh, /status');
     } else if (cmd === '/users') {
       addSystemMessage(`[NET] Active nodes: ${users.join(', ')}`);
     } else if (cmd === '/whoami') {
@@ -215,6 +269,11 @@ const SimpleChatRoom: React.FC<SimpleChatRoomProps> = ({ username, onLeave }) =>
       addSystemMessage('[SYS] Terminal buffer cleared');
     } else if (cmd === '/matrix') {
       addSystemMessage('[SYSTEM] Welcome to the ScrollSpace Matrix, choom. Reality is just another protocol to hack.');
+    } else if (cmd === '/refresh') {
+      addSystemMessage('[SYS] Refreshing connection...');
+      window.location.reload();
+    } else if (cmd === '/status') {
+      addSystemMessage(`[STATUS] Connection: ${isConnected ? 'CONNECTED' : 'DISCONNECTED'} | Channel: ${channelRef.current ? 'ACTIVE' : 'NONE'}`);
     } else if (cmd === '/leave') {
       onLeave();
     } else {
