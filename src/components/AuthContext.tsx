@@ -32,12 +32,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Emergency loading fix - force loading to false after mount
+  useEffect(() => {
+    const emergencyTimeout = setTimeout(() => {
+      console.log('EMERGENCY: Forcing loading to false after 1 second');
+      setLoading(false);
+    }, 1000);
+    
+    return () => clearTimeout(emergencyTimeout);
+  }, []);
+
   useEffect(() => {
     // Set a timeout to prevent infinite loading
     const loadingTimeout = setTimeout(() => {
-      console.log('Auth loading timeout reached, setting loading to false');
+      console.log('AUTH TIMEOUT: 5 seconds reached, forcing loading to false');
+      console.log('Current state - User:', user, 'Profile:', profile);
       setLoading(false);
-    }, 5000); // 5 seconds max
+    }, 3000); // 3 seconds max
 
     // Get initial session
     const getInitialSession = async () => {
@@ -113,9 +124,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       setLoading(false);
     });
-
-    // Set loading to false after subscription is set up
-    setLoading(false);
 
     // Cleanup on unmount
     return () => {

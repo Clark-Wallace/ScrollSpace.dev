@@ -537,9 +537,19 @@ export const authAPI = {
 
   // Get current user
   async getCurrentUser() {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error) throw error;
-    return user;
+    try {
+      console.log('Attempting to get current user from Supabase...');
+      const { data: { user }, error } = await supabase.auth.getUser();
+      console.log('Supabase getUser result - User:', user, 'Error:', error);
+      if (error) {
+        console.error('Error getting current user:', error);
+        throw error;
+      }
+      return user;
+    } catch (err) {
+      console.error('getCurrentUser failed:', err);
+      throw err;
+    }
   },
 
   // Get user profile
