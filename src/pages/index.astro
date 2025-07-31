@@ -10,28 +10,9 @@ import Layout from '../layouts/Layout.astro';
 
   <div class="min-h-screen flex items-center justify-center">
     <div class="text-center space-y-8 max-w-4xl mx-auto px-4">
-      <!-- ASCII Art Logo -->
-      <div class="font-mono text-green-400 text-sm md:text-base leading-tight">
-        <pre class="whitespace-pre">
-{`
-╔═══════════════════════════════════════════════╗
-║                                               ║
-║  ███████  ██████ ██████   ██████  ██      ██ ║
-║  ██      ██      ██   ██ ██    ██ ██      ██ ║
-║  ███████ ██      ██████  ██    ██ ██      ██ ║
-║       ██ ██      ██   ██ ██    ██ ██      ██ ║
-║  ███████  ██████ ██   ██  ██████  ██████  ████████ ║
-║                                               ║
-║             S P A C E                         ║
-║                                               ║
-╚═══════════════════════════════════════════════╝
-`}
-        </pre>
-      </div>
-      
       <!-- Welcome Message -->
       <div class="space-y-4">
-        <h1 class="text-4xl md:text-6xl font-bold text-gray-100 font-mono tracking-wider">
+        <h1 class="text-5xl md:text-7xl font-bold text-green-400 font-mono tracking-wider">
           SCROLL_SPACE
         </h1>
         <p class="text-xl md:text-2xl text-gray-300 font-mono">
@@ -56,7 +37,7 @@ import Layout from '../layouts/Layout.astro';
           </a>
         </div>
         
-        <div class="flex gap-4">
+        <div class="flex gap-4 justify-center">
           <a 
             href="/chat" 
             class="inline-flex items-center px-6 py-3 bg-blue-900 hover:bg-blue-800 border border-blue-400 hover:border-blue-300 text-blue-300 hover:text-blue-200 font-mono font-bold tracking-wider transition-all duration-300 transform hover:scale-105"
@@ -66,6 +47,14 @@ import Layout from '../layouts/Layout.astro';
             <span class="ml-2">_</span>
           </a>
           
+          <a 
+            href="/void" 
+            class="inline-flex items-center px-6 py-3 bg-purple-900 hover:bg-purple-800 border border-purple-400 hover:border-purple-300 text-purple-300 hover:text-purple-200 font-mono font-bold tracking-wider transition-all duration-300 transform hover:scale-105"
+          >
+            <span class="mr-2">🌀</span>
+            THE_VOID
+            <span class="ml-2">_</span>
+          </a>
         </div>
       </div>
       
