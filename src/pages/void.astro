@@ -96,9 +96,9 @@ import Layout from '../layouts/Layout.astro';
     constructor(x, y) {
       this.x = x;
       this.y = y;
-      this.vx = (Math.random() - 0.5) * 2;
-      this.vy = (Math.random() - 0.5) * 2;
-      this.size = 15 + Math.random() * 10;
+      this.vx = (Math.random() - 0.5) * 3;
+      this.vy = (Math.random() - 0.5) * 3;
+      this.size = 12 + Math.random() * 8;
       this.baseSize = this.size;
       this.color = `hsl(${180 + Math.random() * 60}, 70%, 50%)`; // Cyan to blue range
       this.tailAngle = 0;
@@ -106,18 +106,34 @@ import Layout from '../layouts/Layout.astro';
       this.hunger = 0;
       this.isHungry = false;
       this.glowIntensity = 0;
+      this.swimAngle = Math.random() * Math.PI * 2;
+      this.swimSpeed = 1 + Math.random() * 0.5;
+      this.wobble = 0;
+      this.wobbleSpeed = 0.1 + Math.random() * 0.05;
+      this.finAngle = 0;
     }
 
     update(mouseX, mouseY, kips) {
-      // Avoid cursor
-      const dx = this.x - mouseX;
-      const dy = this.y - mouseY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      // Natural swimming pattern
+      this.swimAngle += 0.02;
+      this.wobble += this.wobbleSpeed;
+      this.finAngle += 0.15;
       
-      if (dist < 100) {
-        const force = (100 - dist) / 100;
-        this.vx += (dx / dist) * force * 2;
-        this.vy += (dy / dist) * force * 2;
+      // Base swimming movement
+      this.vx += Math.cos(this.swimAngle) * this.swimSpeed * 0.1;
+      this.vy += Math.sin(this.swimAngle) * this.swimSpeed * 0.05 + Math.sin(this.wobble) * 0.2;
+      
+      // Only small kips avoid cursor, big ones don't care
+      if (this.size < 80) {
+        const dx = this.x - mouseX;
+        const dy = this.y - mouseY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist < 100) {
+          const force = (100 - dist) / 100;
+          this.vx += (dx / dist) * force * 1.5;
+          this.vy += (dy / dist) * force * 1.5;
+        }
       }
 
       // Signal hunger behavior
@@ -173,11 +189,15 @@ import Layout from '../layouts/Layout.astro';
       ctx.save();
       ctx.translate(this.x, this.y);
       
-      // Glow effect
+      // Rotate based on swimming direction
+      const angle = Math.atan2(this.vy, this.vx);
+      ctx.rotate(angle);
+      
+      // Glow effect for hungry kips
       if (this.glowIntensity > 0.1 || this.isHungry) {
         const glowSize = this.size * 2;
         const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize);
-        gradient.addColorStop(0, `hsla(120, 100%, 50%, ${this.isHungry ? 0.3 : this.glowIntensity * 0.5})`);
+        gradient.addColorStop(0, `hsla(${this.isHungry ? 0 : 120}, 100%, 50%, ${this.isHungry ? 0.3 : this.glowIntensity * 0.5})`);
         gradient.addColorStop(1, 'transparent');
         ctx.fillStyle = gradient;
         ctx.beginPath();
@@ -185,47 +205,66 @@ import Layout from '../layouts/Layout.astro';
         ctx.fill();
       }
 
-      // Body
+      // Fish body (more realistic shape)
       ctx.fillStyle = this.isHungry ? '#ff6b6b' : this.color;
       ctx.beginPath();
-      ctx.ellipse(0, 0, this.size, this.size * 0.7, 0, 0, Math.PI * 2);
+      ctx.moveTo(this.size * 0.7, 0);
+      ctx.quadraticCurveTo(this.size * 0.5, -this.size * 0.6, 0, -this.size * 0.5);
+      ctx.quadraticCurveTo(-this.size * 0.8, -this.size * 0.3, -this.size, 0);
+      ctx.quadraticCurveTo(-this.size * 0.8, this.size * 0.3, 0, this.size * 0.5);
+      ctx.quadraticCurveTo(this.size * 0.5, this.size * 0.6, this.size * 0.7, 0);
       ctx.fill();
 
-      // Stripes
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-      ctx.lineWidth = 2;
-      for (let i = -this.size * 0.6; i < this.size * 0.6; i += 8) {
-        ctx.beginPath();
-        ctx.moveTo(i, -this.size * 0.5);
-        ctx.lineTo(i + 4, this.size * 0.5);
-        ctx.stroke();
+      // Scales pattern
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.lineWidth = 1;
+      for (let i = -this.size * 0.6; i < this.size * 0.4; i += 6) {
+        for (let j = -this.size * 0.3; j < this.size * 0.3; j += 6) {
+          ctx.beginPath();
+          ctx.arc(i, j, 3, 0, Math.PI);
+          ctx.stroke();
+        }
       }
 
       // Eye
       ctx.fillStyle = 'white';
       ctx.beginPath();
-      ctx.arc(this.size * 0.3, -this.size * 0.2, this.size * 0.15, 0, Math.PI * 2);
+      ctx.arc(this.size * 0.4, -this.size * 0.15, this.size * 0.12, 0, Math.PI * 2);
       ctx.fill();
       
       ctx.fillStyle = 'black';
       ctx.beginPath();
-      ctx.arc(this.size * 0.35, -this.size * 0.2, this.size * 0.08, 0, Math.PI * 2);
+      ctx.arc(this.size * 0.45, -this.size * 0.15, this.size * 0.06, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Fins
+      ctx.fillStyle = this.isHungry ? 'rgba(255, 107, 107, 0.6)' : 'rgba(100, 200, 255, 0.6)';
+      
+      // Top fin
+      ctx.beginPath();
+      ctx.moveTo(0, -this.size * 0.5);
+      ctx.quadraticCurveTo(-this.size * 0.2, -this.size * 0.8, -this.size * 0.4, -this.size * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Side fins (animated)
+      const finWave = Math.sin(this.finAngle) * 0.2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(0, this.size * (0.5 + finWave), -this.size * 0.3, this.size * (0.6 + finWave));
+      ctx.quadraticCurveTo(-this.size * 0.2, this.size * 0.3, 0, 0);
       ctx.fill();
 
       // Tail
-      const tailWave = Math.sin(this.tailAngle) * 0.3;
-      ctx.strokeStyle = this.isHungry ? '#ff6b6b' : this.color;
-      ctx.lineWidth = this.size * 0.6;
-      ctx.lineCap = 'round';
+      const tailWave = Math.sin(this.tailAngle) * 0.4;
+      ctx.fillStyle = this.isHungry ? '#ff6b6b' : this.color;
       ctx.beginPath();
-      ctx.moveTo(-this.size * 0.5, 0);
-      ctx.quadraticCurveTo(
-        -this.size * 1.2, 
-        tailWave * this.size,
-        -this.size * 1.8, 
-        tailWave * this.size * 1.5
-      );
-      ctx.stroke();
+      ctx.moveTo(-this.size, 0);
+      ctx.quadraticCurveTo(-this.size * 1.3, -this.size * (0.4 + tailWave), -this.size * 1.8, -this.size * (0.3 + tailWave));
+      ctx.lineTo(-this.size * 1.6, 0);
+      ctx.quadraticCurveTo(-this.size * 1.3, this.size * (0.4 - tailWave), -this.size * 1.8, this.size * (0.3 - tailWave));
+      ctx.closePath();
+      ctx.fill();
 
       ctx.restore();
     }
@@ -256,15 +295,20 @@ import Layout from '../layouts/Layout.astro';
     }
 
     update() {
-      this.opacity *= 0.995;
-      
-      // Update particles
-      this.particles.forEach(p => {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vx *= 0.99;
-        p.vy *= 0.99;
-      });
+      // Slower fade for readability
+      if (this.opacity > 0.3) {
+        this.opacity *= 0.999; // Very slow fade initially
+      } else {
+        this.opacity *= 0.98; // Faster fade when breaking apart
+        
+        // Scatter particles when fading
+        this.particles.forEach(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vx *= 0.99;
+          p.vy *= 0.99;
+        });
+      }
       
       return this.opacity > 0.01;
     }
@@ -323,13 +367,26 @@ import Layout from '../layouts/Layout.astro';
     mouseY = e.clientY;
   });
 
+  // Matrix waterfall
+  const matrixColumns = [];
+  const columnWidth = 20;
+  const numColumns = Math.floor(canvas.width / columnWidth);
+  
+  for (let i = 0; i < numColumns; i++) {
+    matrixColumns.push({
+      x: i * columnWidth,
+      chars: [],
+      lastChar: Date.now() - Math.random() * 2000
+    });
+  }
+
   // Double click to drop signal
   canvas.addEventListener('dblclick', (e) => {
     const fact = signalFacts[Math.floor(Math.random() * signalFacts.length)];
     signalPieces.push(new SignalPiece(e.clientX, e.clientY, fact));
     
-    // Random chance for a kip to become hungry
-    if (Math.random() < 0.3) {
+    // Lower chance for signal hunger
+    if (Math.random() < 0.1) { // Reduced from 0.3
       const randomKip = kips[Math.floor(Math.random() * kips.length)];
       randomKip.isHungry = true;
       randomKip.hunger = 100;
@@ -362,6 +419,35 @@ import Layout from '../layouts/Layout.astro';
     ctx.fillStyle = 'rgba(0, 0, 10, 0.1)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // Matrix waterfall (subtle)
+    ctx.font = '12px monospace';
+    ctx.fillStyle = 'rgba(0, 255, 100, 0.03)'; // Very faint
+    
+    matrixColumns.forEach(column => {
+      // Add new characters
+      if (Date.now() - column.lastChar > 100) {
+        column.chars.push({
+          y: 0,
+          char: String.fromCharCode(33 + Math.floor(Math.random() * 94)),
+          opacity: 0.3
+        });
+        column.lastChar = Date.now();
+      }
+      
+      // Update and draw characters
+      column.chars = column.chars.filter(char => {
+        char.y += 2;
+        char.opacity *= 0.98;
+        
+        if (char.opacity > 0.01 && char.y < canvas.height) {
+          ctx.fillStyle = `rgba(0, 255, 100, ${char.opacity * 0.1})`;
+          ctx.fillText(char.char, column.x, char.y);
+          return true;
+        }
+        return false;
+      });
+    });
+
     // Update and draw signal pieces
     for (let i = signalPieces.length - 1; i >= 0; i--) {
       const piece = signalPieces[i];
@@ -376,10 +462,23 @@ import Layout from '../layouts/Layout.astro';
           const dy = kip.y - piece.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
           
-          if (dist < kip.size + 20) {
-            piece.eat(0.02);
-            kip.size += 0.05;
-            kip.glowIntensity = Math.min(1, kip.glowIntensity + 0.1);
+          if (dist < kip.size + 50) { // Larger eating range
+            // Move kip toward signal
+            kip.vx += (piece.x - kip.x) * 0.01;
+            kip.vy += (piece.y - kip.y) * 0.01;
+            
+            if (dist < kip.size + 20) {
+              piece.eat(0.01); // Slower consumption
+              kip.size += 0.02;
+              kip.glowIntensity = Math.min(1, kip.glowIntensity + 0.2);
+              
+              // Visual feedback - create bubble
+              ctx.strokeStyle = `rgba(100, 255, 100, ${piece.opacity})`;
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.arc(piece.x, piece.y, dist, 0, Math.PI * 2);
+              ctx.stroke();
+            }
           }
         });
       }
