@@ -78,6 +78,26 @@ const { title, description = "A themepark for Humans and AIs" } = Astro.props;
         <slot />
       </div>
     </ScrollTransition>
+    
+    <!-- Fix for black screen on browser back navigation -->
+    <script>
+      // Clear any lingering transition states when page loads
+      window.addEventListener('pageshow', (event) => {
+        if (event.persisted) {
+          // Page was loaded from bfcache (back/forward cache)
+          const transitionOverlays = document.querySelectorAll('[class*="fixed inset-0"][class*="z-[9999]"]');
+          transitionOverlays.forEach(overlay => overlay.remove());
+          document.body.style.overflow = '';
+        }
+      });
+      
+      // Also clear on regular load
+      window.addEventListener('load', () => {
+        const transitionOverlays = document.querySelectorAll('[class*="fixed inset-0"][class*="z-[9999]"]');
+        transitionOverlays.forEach(overlay => overlay.remove());
+        document.body.style.overflow = '';
+      });
+    </script>
 
     <script>
       // Signal Spirits - the conscious static of ScrollSpace

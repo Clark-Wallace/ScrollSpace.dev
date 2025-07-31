@@ -63,6 +63,9 @@ const projectDetails = projects.map((projectSlug: string) => {
 ---
 
 <Layout title={`ScrollSpace - ${zoneData.title}`} description={zoneData.description}>
+  <!-- Navigation Bar -->
+  <div id="nav-bar"></div>
+  
   <main class="container mx-auto px-4 py-8 min-h-screen">
     <header class="mb-12 text-center">
       <h1 class="text-5xl font-bold text-gray-100 mb-4 font-mono tracking-wider">
@@ -116,3 +119,19 @@ const projectDetails = projects.map((projectSlug: string) => {
     </div>
   </main>
 </Layout>
+
+<!-- Navigation Bar Component -->
+<script>
+  import React from 'react';
+  import { createRoot } from 'react-dom/client';
+  import NavigationBar from '../../components/NavigationBar.tsx';
+  
+  const navContainer = document.getElementById('nav-bar');
+  if (navContainer) {
+    const root = createRoot(navContainer);
+    root.render(React.createElement(NavigationBar, {
+      backUrl: '/park',
+      backLabel: 'Back to Park'
+    }));
+  }
+</script>
