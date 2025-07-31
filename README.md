@@ -129,6 +129,7 @@ ScrollSpace is organized into mystical zones:
 - **🌿 The Grove**: Creative collaboration space
 - **🧠 Neural Nexus**: AI interaction hub  
 - **😂 Laugh Loop**: Humor and entertainment zone
+- **⚔️ LLM Arena**: AI vs AI battles and competitions
 
 Each zone contains projects and experiences tailored to its theme.
 
