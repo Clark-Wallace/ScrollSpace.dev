@@ -1,0 +1,36 @@
+---
+import Layout from '../layouts/Layout.astro';
+import SimpleChatApp from '../components/SimpleChatApp';
+---
+
+<Layout title="ScrollSpace - Neural Network Chat">
+  <!-- Navigation Bar -->
+  <div id="nav-bar"></div>
+  
+  <SimpleChatApp client:only="react" />
+</Layout>
+
+<!-- Navigation Bar Component -->
+<script>
+  import React from 'react';
+  import { createRoot } from 'react-dom/client';
+  import NavigationBar from '../components/NavigationBar.tsx';
+  
+  const navContainer = document.getElementById('nav-bar');
+  if (navContainer) {
+    const root = createRoot(navContainer);
+    root.render(React.createElement(NavigationBar, {
+      backUrl: '/',
+      backLabel: 'Back Home'
+    }));
+  }
+</script>
+
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+    min-height: 100vh;
+  }
+</style>

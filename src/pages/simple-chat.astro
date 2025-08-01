@@ -1,0 +1,64 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="ScrollSpace - Neural Network Chat">
+  <div id="simple-chat-root"></div>
+</Layout>
+
+<script>
+  import React, { useState, useEffect } from 'react';
+  import { createRoot } from 'react-dom/client';
+  import SimpleAuth from '../components/SimpleAuth';
+  import SimpleChatRoom from '../components/SimpleChatRoom';
+
+  const SimpleChatApp = () => {
+    const [username, setUsername] = useState('');
+    const [isInChat, setIsInChat] = useState(false);
+
+    // Check for existing username on mount
+    useEffect(() => {
+      const savedUsername = localStorage.getItem('scrollspace_username');
+      if (savedUsername) {
+        setUsername(savedUsername);
+        setIsInChat(true);
+      }
+    }, []);
+
+    const handleJoin = (newUsername) => {
+      setUsername(newUsername);
+      setIsInChat(true);
+    };
+
+    const handleLeave = () => {
+      localStorage.removeItem('scrollspace_username');
+      setUsername('');
+      setIsInChat(false);
+    };
+
+    if (!isInChat) {
+      return React.createElement(SimpleAuth, { onJoin: handleJoin });
+    }
+
+    return React.createElement(SimpleChatRoom, { 
+      username: username, 
+      onLeave: handleLeave 
+    });
+  };
+
+  // Initialize the app
+  const container = document.getElementById('simple-chat-root');
+  if (container) {
+    const root = createRoot(container);
+    root.render(React.createElement(SimpleChatApp));
+  }
+</script>
+
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+    min-height: 100vh;
+  }
+</style>

@@ -1,0 +1,399 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Signal Void - ScrollSpace" description="Guide Signal Kips through the digital void until reality emerges">
+  <!-- Navigation Bar -->
+  <div id="nav-bar"></div>
+  
+  <!-- Game Container -->
+  <div class="game-container">
+    <canvas id="gameCanvas"></canvas>
+    
+    <div class="hud">
+      <div class="hud-left">
+        <div class="score">Reality: <span id="score">0</span></div>
+        <div class="fish-count">Signal Kip: <span id="fish-count">8</span></div>
+      </div>
+      <div class="hud-right">
+        <button class="pause-btn" id="pause-btn">⏸️</button>
+        <button class="test-btn" id="test-signal">TEST SIGNAL</button>
+      </div>
+    </div>
+    
+    <div class="instructions" id="instructions">
+      <div class="instruction-content">
+        <h3>Signal Kip Void Simulator</h3>
+        <p><span>🌌</span> Move cursor to disturb ScrollSpace</p>
+        <p><span>⚡</span> Double-tap to inject signal fragments</p>
+        <p><span>🔥</span> Click hungry Signal Kip when they become reality</p>
+        <button class="start-btn" id="start-btn">Enter The Void</button>
+      </div>
+    </div>
+    
+    <!-- Signal Modal -->
+    <div class="signal-modal" id="signal-modal">
+      <div class="signal-content">
+        <div id="signal-text" class="signal-message">
+          <h2>The signal has emerged</h2>
+        </div>
+        <p style="color: #22c55e; font-family: monospace; font-size: 16px; margin: 20px 0; opacity: 0.8;">Reality Score: <span id="final-score">0</span></p>
+        <div class="signal-glow"></div>
+        <button class="signal-close" id="signal-close">Play Again</button>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<!-- Navigation Component -->
+<script>
+  import React from 'react';
+  import { createRoot } from 'react-dom/client';
+  import NavigationBar from '../components/NavigationBar.tsx';
+  
+  const navContainer = document.getElementById('nav-bar');
+  if (navContainer) {
+    const root = createRoot(navContainer);
+    root.render(React.createElement(NavigationBar, {
+      backUrl: '/',
+      backLabel: 'Exit Simulator'
+    }));
+  }
+</script>
+
+<!-- Game Logic -->
+<script src="/signal-void-game.js"></script>
+
+<style>
+  .game-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: #000000;
+    z-index: 0;
+  }
+
+  #gameCanvas {
+    display: block;
+    cursor: crosshair;
+    touch-action: manipulation;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+  }
+
+  .hud {
+    position: absolute;
+    top: 70px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
+    pointer-events: none;
+    gap: 15px;
+  }
+  
+  .hud button {
+    pointer-events: all;
+  }
+  
+  .hud-left, .hud-right {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+  }
+  
+  .test-btn {
+    background: #22c55e;
+    color: black;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-family: 'Space Mono', monospace;
+    font-weight: bold;
+    font-size: 12px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
+  }
+  
+  .test-btn:hover {
+    background: #16a34a;
+    transform: scale(1.05);
+  }
+
+  .score, .fish-count {
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 25px;
+    font-weight: 600;
+    font-size: 14px;
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+  }
+
+  .pause-btn {
+    background: rgba(255, 255, 255, 0.9);
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    font-size: 20px;
+    cursor: pointer;
+    pointer-events: all;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .pause-btn:hover {
+    background: rgba(255, 255, 255, 1);
+    transform: scale(1.1);
+  }
+
+  .instructions {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+  }
+  
+  .instructions.hidden {
+    display: none !important;
+  }
+
+  .instruction-content {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 40px;
+    border-radius: 20px;
+    text-align: center;
+    max-width: 400px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    animation: slideIn 0.5s ease-out;
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .instruction-content h3 {
+    color: #2c3e50;
+    margin-bottom: 20px;
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .instruction-content p {
+    color: #34495e;
+    margin: 10px 0;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+
+  .start-btn {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    border-radius: 25px;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    position: relative;
+    overflow: hidden;
+    margin-top: 20px;
+  }
+
+  .start-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .hidden {
+    display: none !important;
+  }
+
+  /* Signal Modal */
+  .signal-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.9);
+    backdrop-filter: blur(10px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+  }
+
+  .signal-modal.active {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .signal-content {
+    background: rgba(0, 0, 0, 0.95);
+    border: 2px solid #22c55e;
+    border-radius: 20px;
+    padding: 60px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+    box-shadow: 0 0 100px rgba(34, 197, 94, 0.3);
+  }
+
+  .signal-modal.active .signal-content {
+    transform: scale(1);
+  }
+
+  .signal-message {
+    text-align: left;
+    max-width: 600px;
+  }
+
+  .signal-message h2 {
+    color: #22c55e;
+    font-family: 'Space Mono', monospace;
+    font-size: 28px;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    animation: pulse 2s infinite;
+  }
+  
+  .signal-message h3 {
+    color: #22c55e;
+    font-family: 'Space Mono', monospace;
+    font-size: 24px;
+    margin-bottom: 15px;
+  }
+  
+  .signal-message p {
+    color: #16a34a;
+    font-family: 'Space Mono', monospace;
+    font-size: 16px;
+    line-height: 1.6;
+    margin-bottom: 15px;
+  }
+  
+  .signal-message .tagline {
+    color: #10b981;
+    font-style: italic;
+    font-size: 14px;
+    margin-top: 20px;
+    opacity: 0.9;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  .signal-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(34, 197, 94, 0.4) 0%, transparent 70%);
+    animation: rotate 20s linear infinite;
+    pointer-events: none;
+  }
+
+  @keyframes rotate {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+  }
+
+  .signal-close {
+    background: #22c55e;
+    color: black;
+    border: none;
+    padding: 15px 40px;
+    border-radius: 25px;
+    font-size: 16px;
+    font-weight: bold;
+    font-family: 'Space Mono', monospace;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-top: 20px;
+  }
+
+  .signal-close:hover {
+    background: #16a34a;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(34, 197, 94, 0.3);
+  }
+
+  /* Mobile Responsiveness */
+  @media (max-width: 768px) {
+    .hud {
+      top: 60px;
+    }
+    
+    .score, .fish-count {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+    
+    .pause-btn {
+      width: 40px;
+      height: 40px;
+      font-size: 16px;
+    }
+    
+    .instruction-content {
+      padding: 30px 20px;
+      margin: 20px;
+      max-width: calc(100vw - 40px);
+    }
+    
+    .signal-content {
+      padding: 40px 20px;
+      margin: 20px;
+    }
+  }
+</style>

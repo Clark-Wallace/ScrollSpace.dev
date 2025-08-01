@@ -100,7 +100,8 @@ import Layout from '../layouts/Layout.astro';
       this.vy = (Math.random() - 0.5) * 3;
       this.size = 12 + Math.random() * 8;
       this.baseSize = this.size;
-      this.color = `hsl(${180 + Math.random() * 60}, 70%, 50%)`; // Cyan to blue range
+      this.hue = 180 + Math.random() * 60; // Store hue, not full color
+      this.color = `hsl(${this.hue}, 70%, 50%)`; // Cyan to blue range
       this.tailAngle = 0;
       this.tailSpeed = 0.1 + Math.random() * 0.1;
       this.hunger = 0;
@@ -165,11 +166,11 @@ import Layout from '../layouts/Layout.astro';
         }
       }
 
-      // Apply velocity with damping
+      // Apply velocity with minimal damping
       this.x += this.vx;
       this.y += this.vy;
-      this.vx *= 0.98;
-      this.vy *= 0.98;
+      this.vx *= 0.995;  // Much gentler damping
+      this.vy *= 0.995;
 
       // Slow down if too big
       if (this.size > 100) {
@@ -219,18 +220,18 @@ import Layout from '../layouts/Layout.astro';
         gradient.addColorStop(1, '#ff4444');
       } else {
         gradient.addColorStop(0, this.color);
-        gradient.addColorStop(0.5, `hsl(${180 + Math.random() * 60}, 90%, 60%)`);
+        gradient.addColorStop(0.5, `hsl(${this.hue + 10}, 90%, 60%)`);
         gradient.addColorStop(1, this.color);
       }
       
       ctx.fillStyle = gradient;
       ctx.beginPath();
-      // Diamond-shaped body
-      ctx.moveTo(this.size * 0.8, 0);
-      ctx.quadraticCurveTo(this.size * 0.6, -this.size * 0.8, 0, -this.size * 0.7);
-      ctx.quadraticCurveTo(-this.size * 0.4, -this.size * 0.6, -this.size * 0.5, 0);
-      ctx.quadraticCurveTo(-this.size * 0.4, this.size * 0.6, 0, this.size * 0.7);
-      ctx.quadraticCurveTo(this.size * 0.6, this.size * 0.8, this.size * 0.8, 0);
+      // Rounder, more fish-like body
+      ctx.moveTo(this.size * 0.6, 0);
+      ctx.quadraticCurveTo(this.size * 0.5, -this.size * 0.5, 0, -this.size * 0.4);
+      ctx.quadraticCurveTo(-this.size * 0.3, -this.size * 0.4, -this.size * 0.4, 0);
+      ctx.quadraticCurveTo(-this.size * 0.3, this.size * 0.4, 0, this.size * 0.4);
+      ctx.quadraticCurveTo(this.size * 0.5, this.size * 0.5, this.size * 0.6, 0);
       ctx.fill();
 
       // Stripes like angelfish
@@ -246,19 +247,19 @@ import Layout from '../layouts/Layout.astro';
       // Big tropical fish eye
       ctx.fillStyle = 'white';
       ctx.beginPath();
-      ctx.arc(this.size * 0.3, -this.size * 0.1, this.size * 0.2, 0, Math.PI * 2);
+      ctx.arc(this.size * 0.25, 0, this.size * 0.15, 0, Math.PI * 2);
       ctx.fill();
       
       // Pupil
       ctx.fillStyle = 'black';
       ctx.beginPath();
-      ctx.arc(this.size * 0.35, -this.size * 0.1, this.size * 0.1, 0, Math.PI * 2);
+      ctx.arc(this.size * 0.28, 0, this.size * 0.08, 0, Math.PI * 2);
       ctx.fill();
       
       // Eye highlight
       ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
       ctx.beginPath();
-      ctx.arc(this.size * 0.32, -this.size * 0.15, this.size * 0.05, 0, Math.PI * 2);
+      ctx.arc(this.size * 0.26, -this.size * 0.03, this.size * 0.04, 0, Math.PI * 2);
       ctx.fill();
 
       // Dorsal fin (top)
@@ -411,9 +412,9 @@ import Layout from '../layouts/Layout.astro';
       Math.random() * canvas.width,
       Math.random() * canvas.height
     );
-    // Make sure they start moving
-    kip.vx = (Math.random() - 0.5) * 4;
-    kip.vy = (Math.random() - 0.5) * 4;
+    // Make sure they start moving with good speed
+    kip.vx = (Math.random() - 0.5) * 6;
+    kip.vy = (Math.random() - 0.5) * 6;
     kips.push(kip);
   }
 
@@ -520,9 +521,9 @@ import Layout from '../layouts/Layout.astro';
           
           // Attraction range
           if (dist < 150) {
-            // Strong attraction to signal
-            kip.vx += dx * 0.001;
-            kip.vy += dy * 0.001;
+            // Stronger attraction to signal
+            kip.vx += dx * 0.005;
+            kip.vy += dy * 0.005;
           }
           
           // Eating range

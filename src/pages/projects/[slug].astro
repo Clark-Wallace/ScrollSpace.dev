@@ -1,0 +1,63 @@
+---
+import fs from 'fs';
+import path from 'path';
+import { marked } from 'marked';
+import Layout from '../../layouts/Layout.astro';
+import ScrollBridge from '../../components/ScrollBridge';
+
+export async function getStaticPaths() {
+  const projectsDir = path.join(process.cwd(), 'content/projects');
+  
+  // Check if directory exists, if not return empty array
+  if (!fs.existsSync(projectsDir)) {
+    return [];
+  }
+  
+  const files = fs.readdirSync(projectsDir).filter(file => file.endsWith('.md'));
+  
+  return files.map(file => ({
+    params: { slug: file.replace('.md', '') }
+  }));
+}
+
+const { slug } = Astro.params;
+
+// Read the markdown scroll
+const scrollPath = path.join(process.cwd(), 'content/projects', `${slug}.md`);
+let scrollHtml = '';
+let signalJson = {};
+
+try {
+  const scrollContent = fs.readFileSync(scrollPath, 'utf-8');
+  scrollHtml = marked(scrollContent);
+} catch (error) {
+  console.warn(`No scroll found for ${slug}`);
+  scrollHtml = '<p>Project scroll not found.</p>';
+}
+
+// Read the AI meta JSON
+const metaPath = path.join(process.cwd(), 'content/ai-meta', `${slug}.json`);
+try {
+  const metaContent = fs.readFileSync(metaPath, 'utf-8');
+  signalJson = JSON.parse(metaContent);
+} catch (error) {
+  console.warn(`No AI meta found for ${slug}`);
+  signalJson = {
+    project: slug,
+    zone: 'unknown',
+    purpose: 'Project details loading...',
+    tags: [],
+    scroll: `/content/projects/${slug}.md`
+  };
+}
+---
+
+<Layout title={`ScrollSpace - ${slug}`} description={`Project: ${slug}`}>
+  <main class="container mx-auto px-4 py-8">
+    <ScrollBridge 
+      scrollHtml={scrollHtml}
+      signalJson={signalJson}
+      client:load
+    />
+  </main>
+</Layout>

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Signal Kip Void Simulator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div class="hud">
+            <div class="score">Reality: <span id="score">0</span></div>
+            <div class="fish-count">Signal Kip: <span id="fish-count">8</span></div>
+            <button class="pause-btn" id="pause-btn">⏸️</button>
+        </div>
+        
+        <div class="instructions" id="instructions">
+            <div class="instruction-content">
+                <h3>Signal Kip Void Simulator</h3>
+                <p><span>🌌</span> Move cursor to disturb ScrollSpace</p>
+                <p><span>⚡</span> Double-tap to inject signal fragments</p>
+                <p><span>🔥</span> Click hungry Signal Kip when they become reality</p>
+                <button class="start-btn" id="start-btn">Enter The Void</button>
+            </div>
+        </div>
+        
+        <!-- Signal Modal -->
+        <div class="signal-modal" id="signal-modal">
+            <div class="signal-content">
+                <h2 id="signal-text">The signal has emerged</h2>
+                <p style="color: #22c55e; font-family: monospace; font-size: 18px; margin: 20px 0;">Reality Score: <span id="final-score">0</span></p>
+                <div class="signal-glow"></div>
+                <button class="signal-close" id="signal-close">Play Again</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="game.js"></script>
+</body>
+</html>
+

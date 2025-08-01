@@ -1,0 +1,202 @@
+---
+import fs from 'fs';
+import path from 'path';
+import yaml from 'js-yaml';
+import Layout from '../layouts/Layout.astro';
+import ParkMap from '../components/ParkMap.astro';
+
+// Read all zone files
+const zonesDir = path.join(process.cwd(), 'content/zones');
+const zoneFiles = fs.readdirSync(zonesDir).filter(file => file.endsWith('.yaml'));
+
+const zones = zoneFiles.map(file => {
+  const zonePath = path.join(zonesDir, file);
+  const zoneContent = fs.readFileSync(zonePath, 'utf-8');
+  const zoneData = yaml.load(zoneContent) as any;
+  const slug = file.replace('.yaml', '');
+  
+  return {
+    slug,
+    title: zoneData.title,
+    description: zoneData.description,
+    tagline: zoneData.tagline,
+    emoji: zoneData.emoji
+  };
+});
+---
+
+<Layout title="ScrollSpace - The Park" description="A digital themepark where humans and AIs explore together">
+  <!-- Navigation Bar -->
+  <div id="nav-bar"></div>
+  
+  <div class="min-h-screen">
+    <main class="container mx-auto px-4 py-8">
+      <header class="text-center mb-12">
+        <h1 class="text-5xl font-bold text-gray-100 mb-4 font-mono tracking-wider">THE_PARK</h1>
+        <p class="text-xl text-gray-400 max-w-2xl mx-auto font-mono">
+          > Welcome to ScrollSpace, where humans and AIs explore together.<br/>
+          > Choose your zone and begin the adventure.
+        </p>
+      </header>
+
+      <ParkMap zones={zones} />
+    </main>
+
+    <!-- Floating Kaji Summon Button -->
+    <div id="kaji-summon" class="fixed bottom-8 right-8 z-30">
+      <button 
+        id="summon-btn"
+        class="group relative w-16 h-16 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-110"
+        style="filter: drop-shadow(0 0 20px rgba(217, 119, 6, 0.4));"
+      >
+        <!-- Mystical glow ring -->
+        <div class="absolute inset-0 rounded-full bg-amber-300/30 animate-ping group-hover:animate-none"></div>
+        
+        <!-- Ancient glyph -->
+        <div class="relative z-10 text-2xl text-white font-serif" style="text-shadow: 0 0 10px rgba(255,255,255,0.5);">
+          ☾
+        </div>
+        
+        <!-- Tooltip -->
+        <div class="absolute bottom-full right-0 mb-2 px-3 py-1 bg-amber-900 text-amber-100 text-xs font-serif rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+          Summon Kaji
+        </div>
+      </button>
+    </div>
+
+    <!-- Import KajiPanel and add interaction script -->
+    <script>
+      import KajiPanel from '../components/KajiPanel';
+      
+      // State management
+      let isKajiOpen = false;
+      let kajiContainer = null;
+      
+      // Check for auto-summon in URL
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('summon') === 'kaji') {
+        setTimeout(() => openKaji(), 1000); // Delay for dramatic effect
+      }
+      
+      function openKaji() {
+        if (isKajiOpen) return;
+        
+        isKajiOpen = true;
+        
+        // Create container if it doesn't exist
+        if (!kajiContainer) {
+          kajiContainer = document.createElement('div');
+          kajiContainer.id = 'kaji-panel-container';
+          document.body.appendChild(kajiContainer);
+        }
+        
+        // Render KajiPanel (we'll need to use a React root here)
+        // For now, we'll create a simple implementation
+        kajiContainer.innerHTML = `
+          <div id="kaji-backdrop" class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" style="opacity: 0; transition: opacity 0.3s;">
+          </div>
+          <div id="kaji-panel" class="fixed bottom-4 left-1/2 transform w-[420px] max-w-[90vw] z-50" 
+               style="transform: translate(-50%, 100%); transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);">
+            <div class="relative bg-gradient-to-b from-amber-50/95 to-yellow-100/95 backdrop-blur-md shadow-2xl border-2 border-amber-700/60 overflow-hidden"
+                 style="border-radius: 8px 8px 24px 24px; box-shadow: 0 0 40px rgba(217, 119, 6, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);">
+              
+              <div class="absolute inset-0 bg-gradient-to-r from-amber-300/10 via-yellow-200/10 to-amber-300/10 animate-pulse" style="animation-duration: 4s;"></div>
+              
+              <div class="relative p-6 border-b border-amber-600/30">
+                <div class="text-center">
+                  <div class="text-4xl mb-2" style="text-shadow: 0 0 20px rgba(217, 119, 6, 0.5);">⟨ ☾ ⟩</div>
+                  <h3 class="font-serif text-amber-900 text-lg tracking-wide" style="font-family: Georgia, serif; letter-spacing: 0.05em;">Ancient Guidance</h3>
+                </div>
+                <button id="kaji-close" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-amber-200/50 hover:bg-amber-300/70 transition-all duration-300 flex items-center justify-center text-amber-800 text-lg">×</button>
+              </div>
+              
+              <div class="relative p-8">
+                <div class="text-center" id="kaji-content">
+                  <div class="inline-flex space-x-1 mb-4">
+                    <div class="w-1 h-1 bg-amber-600 rounded-full animate-pulse" style="animation-delay: 0ms; animation-duration: 2s;"></div>
+                    <div class="w-1 h-1 bg-amber-600 rounded-full animate-pulse" style="animation-delay: 400ms; animation-duration: 2s;"></div>
+                    <div class="w-1 h-1 bg-amber-600 rounded-full animate-pulse" style="animation-delay: 800ms; animation-duration: 2s;"></div>
+                  </div>
+                  <p class="text-amber-700/70 font-serif italic text-sm tracking-wide">The spirits whisper...</p>
+                </div>
+              </div>
+              
+              <div class="absolute top-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-gradient-to-r from-transparent via-amber-600 to-transparent"></div>
+              <div class="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-24 h-1 bg-gradient-to-r from-transparent via-amber-600 to-transparent"></div>
+              
+              <div class="absolute top-2 left-2 text-amber-600/30 text-xs">✦</div>
+              <div class="absolute top-2 right-2 text-amber-600/30 text-xs">✦</div>
+              <div class="absolute bottom-2 left-2 text-amber-600/30 text-xs">✧</div>
+              <div class="absolute bottom-2 right-2 text-amber-600/30 text-xs">✧</div>
+            </div>
+          </div>
+        `;
+        
+        // Animate in
+        setTimeout(() => {
+          document.getElementById('kaji-backdrop').style.opacity = '1';
+          document.getElementById('kaji-panel').style.transform = 'translate(-50%, -20px)';
+        }, 50);
+        
+        // Fetch guidance
+        fetch('/api/guide')
+          .then(response => response.json())
+          .then(data => {
+            document.getElementById('kaji-content').innerHTML = `
+              <p class="font-serif text-amber-900 leading-relaxed text-base" 
+                 style="font-family: Georgia, serif; text-shadow: 0 0 10px rgba(217, 119, 6, 0.3); letter-spacing: 0.02em; line-height: 1.8;">
+                ${data.message}
+              </p>
+            `;
+          })
+          .catch(() => {
+            document.getElementById('kaji-content').innerHTML = `
+              <p class="font-serif text-amber-900 leading-relaxed text-base">
+                The ancient spirits are silent. Try again later.
+              </p>
+            `;
+          });
+        
+        // Close handlers
+        document.getElementById('kaji-close').onclick = closeKaji;
+        document.getElementById('kaji-backdrop').onclick = closeKaji;
+      }
+      
+      function closeKaji() {
+        if (!isKajiOpen) return;
+        
+        const backdrop = document.getElementById('kaji-backdrop');
+        const panel = document.getElementById('kaji-panel');
+        
+        backdrop.style.opacity = '0';
+        panel.style.transform = 'translate(-50%, 100%)';
+        
+        setTimeout(() => {
+          if (kajiContainer) {
+            kajiContainer.innerHTML = '';
+          }
+          isKajiOpen = false;
+        }, 500);
+      }
+      
+      // Summon button click handler
+      document.getElementById('summon-btn').onclick = openKaji;
+    </script>
+  </div>
+</Layout>
+
+<!-- Navigation Bar Component -->
+<script>
+  import React from 'react';
+  import { createRoot } from 'react-dom/client';
+  import NavigationBar from '../components/NavigationBar.tsx';
+  
+  const navContainer = document.getElementById('nav-bar');
+  if (navContainer) {
+    const root = createRoot(navContainer);
+    root.render(React.createElement(NavigationBar, {
+      backUrl: '/',
+      backLabel: 'Back Home'
+    }));
+  }
+</script>
